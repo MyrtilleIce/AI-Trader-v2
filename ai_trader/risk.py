@@ -5,26 +5,43 @@ from __future__ import annotations
 import logging
 from typing import Tuple
 
+from .execution import BitgetExecution
+
 
 class RiskManager:
-    """Calculate position size and dynamic SL/TP."""
+    """Calculate position size based on account balance and manage SL/TP."""
 
-    def __init__(self, balance: float, risk_per_trade: float = 0.01) -> None:
-        self.balance = balance
-        self.risk_per_trade = risk_per_trade
+    def __init__(
+        self,
+        executor: BitgetExecution,
+        symbol: str,
+        leverage: int = 10,
+        portion: float = 0.1,
+    ) -> None:
+        self.executor = executor
+        self.symbol = symbol
+        self.leverage = leverage
+        self.portion = portion
         self.log = logging.getLogger(self.__class__.__name__)
 
-    def position_size(
-        self, price: float, sl_price: float, leverage: int = 10
-    ) -> float:
-        """Determine position size based on risk percentage."""
-        risk_amount = self.balance * self.risk_per_trade
-        stop_loss = abs(price - sl_price)
-        qty = (risk_amount / stop_loss) * leverage
+    def get_available_balance(self) -> float:
+        """Fetch available USDT balance for the configured symbol."""
+        balance = self.executor.available_balance(self.symbol)
+        self.log.debug("Fetched balance: %s", balance)
+        return balance
+
+    def position_size(self, price: float) -> float:
+        """Calculate size using a portion of the available balance."""
+        balance = self.get_available_balance()
+        trade_amount = balance * self.portion
+        qty = (trade_amount * self.leverage) / price
         self.log.debug(
-            "Position size calculated: price=%s sl=%s qty=%s", price, sl_price, qty
+            "Position size calculated: price=%s portion=%s qty=%s",
+            price,
+            self.portion,
+            qty,
         )
-        return max(qty, 0)
+        return max(qty, 0.0)
 
     @staticmethod
     def dynamic_sl_tp(price: float, side: str) -> Tuple[float, float]:
