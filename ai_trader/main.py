@@ -42,7 +42,7 @@ def run_bot(run_once: bool = True) -> None:
     researcher = Researcher()
 
     step = 0
-    # main loop - runs once when ``run_once`` is True for testing
+
     while True:
         step += 1
         df = data_handler.fetch_candles()
@@ -76,7 +76,6 @@ def run_bot(run_once: bool = True) -> None:
 
         time.sleep(60)
 
-
     logging.info("Execution finished")
 
 
@@ -87,4 +86,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
