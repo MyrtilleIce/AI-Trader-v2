@@ -29,7 +29,7 @@ load_dotenv()
 
 
 def run_bot(run_once: bool = True) -> None:
-    """Run the trading cycle once when ``run_once`` is ``True``."""
+    """Run a single trading cycle when ``run_once`` is ``True``."""
     symbol = os.getenv("SYMBOL", "BTCUSDT")
     leverage = int(os.getenv("LEVERAGE", "10"))
 
@@ -42,7 +42,6 @@ def run_bot(run_once: bool = True) -> None:
     researcher = Researcher()
 
     step = 0
-    # main loop - runs once when ``run_once`` is True for testing
     while True:
         step += 1
         df = data_handler.fetch_candles()
@@ -54,16 +53,24 @@ def run_bot(run_once: bool = True) -> None:
             sl, tp = risk.dynamic_sl_tp(price, signal)
             size = risk.position_size(price)
             logging.info("Calculated position size: %s", size)
-            executor.place_order(symbol, size, signal, sl=sl, tp=tp, leverage=leverage)
-            memory.record({
-                "timestamp": int(time.time()),
-                "side": signal,
-                "price": price,
-                "qty": size,
-                "pnl": 0.0,
-            })
+            executor.place_order(
+                symbol,
+                size,
+                signal,
+                sl=sl,
+                tp=tp,
+                leverage=leverage,
+            )
+            memory.record(
+                {
+                    "timestamp": int(time.time()),
+                    "side": signal,
+                    "price": price,
+                    "qty": size,
+                    "pnl": 0.0,
+                }
+            )
 
-        # optional learning
         if step % (60 * 24) == 0:  # once a day assuming loop every minute
             tips = researcher.search("crypto trading strategy")
             summary = researcher.summarize(tips)
@@ -76,12 +83,11 @@ def run_bot(run_once: bool = True) -> None:
 
         time.sleep(60)
 
-
     logging.info("Execution finished")
 
 
 def main() -> None:
-    """Entry point called when executed as a script."""
+    """Entry point used when the module is executed as a script."""
     run_bot(run_once=True)
 
 
