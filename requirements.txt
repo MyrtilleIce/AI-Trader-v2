@@ -1,0 +1,7 @@
+pandas
+requests
+python-dotenv
+ta
+openai
+joblib
+scikit-learn
