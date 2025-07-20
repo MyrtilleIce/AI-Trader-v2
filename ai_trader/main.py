@@ -29,7 +29,7 @@ load_dotenv()
 
 
 def run_bot(run_once: bool = True) -> None:
-    """Run one trading cycle unless ``run_once`` is ``False``."""
+    """Run a single trading cycle when ``run_once`` is ``True``."""
     symbol = os.getenv("SYMBOL", "BTCUSDT")
     leverage = int(os.getenv("LEVERAGE", "10"))
 
@@ -54,14 +54,23 @@ def run_bot(run_once: bool = True) -> None:
             sl, tp = risk.dynamic_sl_tp(price, signal)
             size = risk.position_size(price)
             logging.info("Calculated position size: %s", size)
-            executor.place_order(symbol, size, signal, sl=sl, tp=tp, leverage=leverage)
-            memory.record({
-                "timestamp": int(time.time()),
-                "side": signal,
-                "price": price,
-                "qty": size,
-                "pnl": 0.0,
-            })
+            executor.place_order(
+                symbol,
+                size,
+                signal,
+                sl=sl,
+                tp=tp,
+                leverage=leverage,
+            )
+            memory.record(
+                {
+                    "timestamp": int(time.time()),
+                    "side": signal,
+                    "price": price,
+                    "qty": size,
+                    "pnl": 0.0,
+                }
+            )
 
         # optional learning
         if step % (60 * 24) == 0:  # once a day assuming loop every minute
@@ -80,7 +89,7 @@ def run_bot(run_once: bool = True) -> None:
 
 
 def main() -> None:
-    """Entry point called when executed as a script."""
+    """Entry point used when the module is executed as a script."""
     run_bot(run_once=True)
 
 
