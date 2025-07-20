@@ -42,6 +42,7 @@ def run_bot(run_once: bool = True) -> None:
     researcher = Researcher()
 
     step = 0
+
     while True:
         step += 1
         df = data_handler.fetch_candles()
@@ -71,6 +72,7 @@ def run_bot(run_once: bool = True) -> None:
                 }
             )
 
+        # optional learning
         if step % (60 * 24) == 0:  # once a day assuming loop every minute
             tips = researcher.search("crypto trading strategy")
             summary = researcher.summarize(tips)
@@ -93,4 +95,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
