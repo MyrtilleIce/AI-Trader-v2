@@ -28,7 +28,8 @@ logging.basicConfig(
 load_dotenv()
 
 
-def main() -> None:
+def run_bot(run_once: bool = True) -> None:
+    """Run one trading cycle unless ``run_once`` is ``False``."""
     symbol = os.getenv("SYMBOL", "BTCUSDT")
     leverage = int(os.getenv("LEVERAGE", "10"))
 
@@ -41,6 +42,7 @@ def main() -> None:
     researcher = Researcher()
 
     step = 0
+
     while True:
         step += 1
         df = data_handler.fetch_candles()
@@ -69,9 +71,18 @@ def main() -> None:
 
         model.train(df)
 
+        if run_once:
+            break
+
         time.sleep(60)
+
+    logging.info("Execution finished")
+
+
+def main() -> None:
+    """Entry point called when executed as a script."""
+    run_bot(run_once=True)
 
 
 if __name__ == "__main__":
     main()
-
