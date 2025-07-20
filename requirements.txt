@@ -5,3 +5,4 @@ ta
 openai
 joblib
 scikit-learn
+serpapi
