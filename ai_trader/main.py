@@ -28,8 +28,8 @@ logging.basicConfig(
 load_dotenv()
 
 
-def main(run_once: bool = True) -> None:
-    """Run one trading cycle unless ``run_once`` is False."""
+def run_bot(run_once: bool = True) -> None:
+    """Run one trading cycle unless ``run_once`` is ``False``."""
     symbol = os.getenv("SYMBOL", "BTCUSDT")
     leverage = int(os.getenv("LEVERAGE", "10"))
 
@@ -42,7 +42,7 @@ def main(run_once: bool = True) -> None:
     researcher = Researcher()
 
     step = 0
-    # main loop - runs once when run_once=True for testing
+    # main loop - runs once when ``run_once`` is True for testing
     while True:
         step += 1
         df = data_handler.fetch_candles()
@@ -76,7 +76,13 @@ def main(run_once: bool = True) -> None:
 
         time.sleep(60)
 
+
     logging.info("Execution finished")
+
+
+def main() -> None:
+    """Entry point called when executed as a script."""
+    run_bot(run_once=True)
 
 
 if __name__ == "__main__":
