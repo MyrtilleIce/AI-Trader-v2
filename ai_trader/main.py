@@ -31,12 +31,11 @@ load_dotenv()
 def main() -> None:
     symbol = os.getenv("SYMBOL", "BTCUSDT")
     leverage = int(os.getenv("LEVERAGE", "10"))
-    balance = float(os.getenv("BALANCE", "1000"))
 
     data_handler = DataHandler(symbol)
     strategy = Strategy()
     executor = BitgetExecution()
-    risk = RiskManager(balance)
+    risk = RiskManager(executor, symbol, leverage)
     memory = Memory()
     model = SimpleModel()
     researcher = Researcher()
@@ -51,7 +50,8 @@ def main() -> None:
         if signal:
             price = df.iloc[-1]["close"]
             sl, tp = risk.dynamic_sl_tp(price, signal)
-            size = risk.position_size(price, sl, leverage)
+            size = risk.position_size(price)
+            logging.info("Calculated position size: %s", size)
             executor.place_order(symbol, size, signal, sl=sl, tp=tp, leverage=leverage)
             memory.record({
                 "timestamp": int(time.time()),

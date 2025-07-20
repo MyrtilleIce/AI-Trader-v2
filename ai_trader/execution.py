@@ -7,7 +7,7 @@ import hashlib
 import json
 import logging
 import time
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import requests
 from dotenv import dotenv_values
@@ -42,6 +42,33 @@ class BitgetExecution:
         }
 
     # --- public API ------------------------------------------------------
+
+    def get_account(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Return account information for a given symbol."""
+        endpoint = "/api/mix/v1/account/account"
+        params = f"symbol={symbol}&marginCoin=USDT"
+        url = f"{self.BASE_URL}{endpoint}?{params}"
+        headers = self._headers("GET", endpoint, params)
+        try:
+            response = self.session.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            self.log.debug("Account data: %s", data)
+            return data.get("data", {})
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.error("Account fetch failed: %s", exc)
+            return None
+
+    def available_balance(self, symbol: str) -> float:
+        """Convenience method to get available USDT balance for a symbol."""
+        account = self.get_account(symbol)
+        if account is None:
+            return 0.0
+        try:
+            return float(account.get("availableBalance", 0))
+        except (TypeError, ValueError):
+            return 0.0
+
     def place_order(
         self,
         symbol: str,
