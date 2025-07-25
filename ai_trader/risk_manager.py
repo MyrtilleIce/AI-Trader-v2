@@ -117,18 +117,26 @@ class RiskManager:
         return allowed
 
     # ------------------------------------------------------------------
-    def calculate_position_size(self, entry_price: float, stop_loss: float) -> float:
-        """Return trade size based on risk percentage and SL distance."""
+    def position_size(
+        self, entry_price: float, stop_loss: float | None = None
+    ) -> float:
+        """Return trade size based on risk percentage and SL distance.
+
+        When ``stop_loss`` is ``None`` a fixed portion of balance is used.
+        """
         balance = self.get_available_balance()
-        risk_amount = balance * self.risk_per_trade
-        distance = abs(entry_price - stop_loss)
-        if distance == 0:
-            return 0.0
-        qty = risk_amount / distance
+        if stop_loss is None:
+            trade_amount = balance * self.risk_per_trade * self.leverage
+            qty = trade_amount / entry_price
+        else:
+            risk_amount = balance * self.risk_per_trade
+            distance = abs(entry_price - stop_loss)
+            if distance == 0:
+                return 0.0
+            qty = risk_amount / distance
         self.log.debug(
-            "Position size: balance=%s risk_amount=%s entry=%s sl=%s qty=%s",
+            "Position size: balance=%s entry=%s sl=%s qty=%s",
             balance,
-            risk_amount,
             entry_price,
             stop_loss,
             qty,
@@ -144,6 +152,17 @@ class RiskManager:
         sl = entry_price - direction * self.atr_factor * atr
         distance = abs(entry_price - sl)
         tp = entry_price + direction * distance * self.reward_ratio
+        return sl, tp
+
+    @staticmethod
+    def dynamic_sl_tp(price: float, side: str) -> Tuple[float, float]:
+        """Fallback SL/TP calculation based on a fixed percentage."""
+        if side == "buy":
+            sl = price * 0.99
+            tp = price * 1.02
+        else:
+            sl = price * 1.01
+            tp = price * 0.98
         return sl, tp
 
     # ------------------------------------------------------------------

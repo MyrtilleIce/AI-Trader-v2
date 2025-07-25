@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import logging
 from pathlib import Path
@@ -23,14 +24,24 @@ class Memory:
     def record(self, info: Dict[str, float]) -> None:
         """Append trade information to CSV."""
         with self.path.open("a", newline="") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=["timestamp", "side", "price", "qty", "pnl"])
+            writer = csv.DictWriter(
+                csvfile, fieldnames=["timestamp", "side", "price", "qty", "pnl"]
+            )
             writer.writerow(info)
         self.log.info("Trade recorded: %s", info)
+
+    async def async_record(self, info: Dict[str, float]) -> None:
+        """Asynchronously append trade information to CSV."""
+        await asyncio.to_thread(self.record, info)
 
     def load(self) -> List[Dict[str, str]]:
         with self.path.open() as csvfile:
             reader = csv.DictReader(csvfile)
             return list(reader)
+
+    async def async_load(self) -> List[Dict[str, str]]:
+        """Asynchronously load trade history."""
+        return await asyncio.to_thread(self.load)
 
     # ------------------------------------------------------------------
     def send_daily_summary(self) -> None:
@@ -45,4 +56,3 @@ class Memory:
             level="INFO",
         )
         # TODO: implement weekly summary with success rate and drawdown stats
-

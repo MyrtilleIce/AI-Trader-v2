@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import List
 
+import keras
 import openai
 import optuna
 import pandas as pd
@@ -58,8 +60,8 @@ class AutoOptimizer:
 
     def optimise(self, data: pd.DataFrame) -> None:
         def objective(trial: optuna.Trial) -> float:
-            threshold = trial.suggest_float("threshold", 0.1, 1.0)
-            window = trial.suggest_int("window", 10, 50)
+            threshold = trial.suggest_float("threshold", 0.1, 1.0)  # noqa: F841
+            window = trial.suggest_int("window", 10, 50)  # noqa: F841
             # TODO: backtest with given parameters
             return 0.0
 
@@ -81,10 +83,20 @@ class DenseModel:
         )
         self.model.compile(optimizer="adam", loss="mse")
         self.log = logging.getLogger(self.__class__.__name__)
+        if Path(self.model_path).exists():
+            self.load()
 
     def train(self, X: pd.DataFrame, y: pd.Series) -> None:
         self.model.fit(X, y, epochs=10, verbose=0)
-        self.model.save(self.model_path)
+        self.save()
 
     def predict(self, X: pd.DataFrame) -> List[float]:
         return self.model.predict(X, verbose=0).flatten().tolist()
+
+    def save(self) -> None:
+        self.model.save(self.model_path)
+        self.log.info("Model saved to %s", self.model_path)
+
+    def load(self) -> None:
+        self.model = keras.models.load_model(self.model_path)
+        self.log.info("Model loaded from %s", self.model_path)
