@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import hmac
-import hashlib
 import json
 import logging
 import time
 from typing import Any, Dict, Optional
 
 import requests
-from dotenv import dotenv_values
+
+from .utils.security import auth_headers
 
 
 class BitgetExecution:
@@ -18,28 +17,15 @@ class BitgetExecution:
 
     BASE_URL = "https://api.bitget.com/api/v2"
 
-    def __init__(self, config_path: str = ".env") -> None:
-        self.cfg = dotenv_values(config_path)
+    def __init__(self) -> None:
         self.session = requests.Session()
         self.log = logging.getLogger(self.__class__.__name__)
 
     # --- utility methods -------------------------------------------------
-    def _sign(self, method: str, endpoint: str, params: str, timestamp: str) -> str:
-        """Create Bitget signature."""
-        message = timestamp + method.upper() + endpoint + params
-        secret_key = self.cfg.get("BITGET_SECRET", "")
-        return hmac.new(secret_key.encode(), message.encode(), hashlib.sha256).hexdigest()
-
-    def _headers(self, method: str, endpoint: str, params: str) -> Dict[str, str]:
-        ts = str(int(time.time() * 1000))
-        sign = self._sign(method, endpoint, params, ts)
-        return {
-            "ACCESS-KEY": self.cfg.get("BITGET_KEY", ""),
-            "ACCESS-SIGN": sign,
-            "ACCESS-TIMESTAMP": ts,
-            "ACCESS-PASSPHRASE": self.cfg.get("BITGET_PASSPHRASE", ""),
-            "Content-Type": "application/json",
-        }
+    @staticmethod
+    def _headers(method: str, endpoint: str, params: str) -> Dict[str, str]:
+        """Wrapper around :func:`auth_headers`."""
+        return auth_headers(method, endpoint, params)
 
     # --- public API ------------------------------------------------------
 
@@ -105,4 +91,3 @@ class BitgetExecution:
         except Exception as exc:  # pylint: disable=broad-except
             self.log.error("Order failed: %s", exc)
             return None
-

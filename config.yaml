@@ -1,0 +1,15 @@
+bitget:
+  symbol: BTCUSDT
+  product_type: umcbl
+  leverage: 10
+
+strategy:
+  portion: 0.1
+  threshold: 0.3
+
+risk:
+  max_drawdown: 0.02
+
+learning:
+  optuna_trials: 50
+  model_path: model.h5
