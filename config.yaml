@@ -8,7 +8,16 @@ strategy:
   threshold: 0.3
 
 risk:
-  max_drawdown: 0.02
+  # maximum daily drawdown allowed before trading halts
+  max_drawdown: 0.05
+  # risk allocated per trade
+  risk_per_trade: 0.01
+  # ATR multiplier for stop loss calculation
+  atr_factor: 1.5
+  # minimum risk to reward ratio
+  reward_ratio: 2.0
+  # enable trailing stop feature
+  trailing_stop: false
 
 learning:
   optuna_trials: 50

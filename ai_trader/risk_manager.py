@@ -1,68 +1,175 @@
-"""Enhanced risk management utilities."""
+"""Advanced risk management for automated crypto trading."""
 
 from __future__ import annotations
 
 import datetime as dt
 import logging
-from typing import Tuple
+import os
+from dataclasses import dataclass
+from distutils.util import strtobool
+from pathlib import Path
+from typing import Dict, Optional, Tuple
+
+import yaml
+from prometheus_client import Counter, Gauge
 
 from .execution import BitgetExecution
 
 
+@dataclass
+class TradeInfo:
+    """Information stored for an open trade."""
+
+    risk: float
+    sl: float
+    tp: float
+    trailing: bool = False
+
+
 class RiskManager:
-    """Manage position sizing and daily drawdown limits."""
+    """Manage risk, position sizing and daily drawdown limits."""
+
+    CONFIG_PATH = Path(os.getenv("CONFIG_FILE", "config.yaml"))
 
     def __init__(
-        self,
-        executor: BitgetExecution,
-        symbol: str,
-        leverage: int = 10,
-        portion: float = 0.1,
-        max_drawdown: float = 0.02,
+        self, executor: BitgetExecution, symbol: str, leverage: int = 10
     ) -> None:
         self.executor = executor
         self.symbol = symbol
         self.leverage = leverage
-        self.portion = portion
-        self.max_drawdown = max_drawdown
-        self.daily_pnl = 0.0
-        self.day = dt.date.today()
         self.log = logging.getLogger(self.__class__.__name__)
+
+        config = self._load_config()
+        risk_cfg = config.get("risk", {})
+        self.risk_per_trade = float(
+            os.getenv("RISK_PER_TRADE", risk_cfg.get("risk_per_trade", 0.01))
+        )
+        self.atr_factor = float(
+            os.getenv("ATR_FACTOR", risk_cfg.get("atr_factor", 1.5))
+        )
+        self.reward_ratio = float(
+            os.getenv("REWARD_RATIO", risk_cfg.get("reward_ratio", 2.0))
+        )
+        self.trailing_stop_enabled = bool(
+            strtobool(
+                os.getenv("TRAILING_STOP", str(risk_cfg.get("trailing_stop", False)))
+            )
+        )
+        self.daily_drawdown_limit = float(
+            os.getenv("DAILY_DRAWDOWN_LIMIT", risk_cfg.get("max_drawdown", 0.05))
+        )
+
+        self.day = dt.date.today()
+        self.start_balance: float = self.get_available_balance()
+        self.daily_pnl = 0.0
+        self.open_trades: Dict[str, TradeInfo] = {}
+
+        self.metrics = {
+            "open_trades": Gauge("ai_trader_open_trades", "Number of open trades"),
+            "daily_pnl": Gauge("ai_trader_daily_pnl", "Daily PnL in USDT"),
+            "trades_opened": Counter("ai_trader_trades_opened_total", "Trades opened"),
+            "trades_closed": Counter("ai_trader_trades_closed_total", "Trades closed"),
+        }
+
+    # ------------------------------------------------------------------
+    def _load_config(self) -> Dict[str, dict]:
+        """Return configuration from ``CONFIG_PATH``."""
+        if not self.CONFIG_PATH.exists():
+            return {}
+        try:
+            with self.CONFIG_PATH.open("r", encoding="utf-8") as fh:
+                return yaml.safe_load(fh) or {}
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.error("Config load failed: %s", exc)
+            return {}
 
     def _reset_daily(self) -> None:
         today = dt.date.today()
         if today != self.day:
             self.day = today
             self.daily_pnl = 0.0
+            self.start_balance = self.get_available_balance()
+            self.metrics["daily_pnl"].set(0)
+            self.log.info("Daily reset. Start balance: %s", self.start_balance)
 
-    def update_pnl(self, pnl: float) -> None:
-        self._reset_daily()
-        self.daily_pnl += pnl
-
-    def allowed(self) -> bool:
-        self._reset_daily()
-        if self.daily_pnl <= -self.max_drawdown:
-            self.log.warning("Daily drawdown limit reached")
-            return False
-        return True
-
+    # ------------------------------------------------------------------
     def get_available_balance(self) -> float:
+        """Return the available balance for ``symbol``."""
         balance = self.executor.available_balance(self.symbol)
         self.log.debug("Fetched balance: %s", balance)
         return balance
 
-    def position_size(self, price: float) -> float:
+    # ------------------------------------------------------------------
+    def can_open_new_trade(self) -> bool:
+        """Return ``True`` if a new trade can be opened."""
+        self._reset_daily()
+        allowed = (self.start_balance + self.daily_pnl) > (
+            self.start_balance * (1 - self.daily_drawdown_limit)
+        )
+        if not allowed:
+            self.log.warning("Daily drawdown limit reached")
+        return allowed
+
+    # ------------------------------------------------------------------
+    def calculate_position_size(self, entry_price: float, stop_loss: float) -> float:
+        """Return trade size based on risk percentage and SL distance."""
         balance = self.get_available_balance()
-        trade_amount = balance * self.portion
-        qty = (trade_amount * self.leverage) / price
+        risk_amount = balance * self.risk_per_trade
+        distance = abs(entry_price - stop_loss)
+        if distance == 0:
+            return 0.0
+        qty = risk_amount / distance
+        self.log.debug(
+            "Position size: balance=%s risk_amount=%s entry=%s sl=%s qty=%s",
+            balance,
+            risk_amount,
+            entry_price,
+            stop_loss,
+            qty,
+        )
         return max(qty, 0.0)
 
-    @staticmethod
-    def dynamic_sl_tp(price: float, side: str) -> Tuple[float, float]:
-        if side == "buy":
-            sl = price * 0.99
-            tp = price * 1.02
-        else:
-            sl = price * 1.01
-            tp = price * 0.98
+    # ------------------------------------------------------------------
+    def compute_sl_tp(
+        self, entry_price: float, side: str, atr: float
+    ) -> Tuple[float, float]:
+        """Return stop loss and take profit based on ATR."""
+        direction = 1 if side == "buy" else -1
+        sl = entry_price - direction * self.atr_factor * atr
+        distance = abs(entry_price - sl)
+        tp = entry_price + direction * distance * self.reward_ratio
         return sl, tp
+
+    # ------------------------------------------------------------------
+    def register_trade(
+        self, trade_id: str, risk: float, sl: float, tp: float, ts: bool = False
+    ) -> None:
+        """Store a newly opened trade."""
+        self.open_trades[trade_id] = TradeInfo(risk=risk, sl=sl, tp=tp, trailing=ts)
+        self.metrics["open_trades"].set(len(self.open_trades))
+        self.metrics["trades_opened"].inc()
+
+    # ------------------------------------------------------------------
+    def update_closed_trade(self, trade_id: str, profit_loss: float) -> None:
+        """Update metrics when a trade closes."""
+        self._reset_daily()
+        self.daily_pnl += profit_loss
+        self.metrics["daily_pnl"].set(self.daily_pnl)
+        self.open_trades.pop(trade_id, None)
+        self.metrics["open_trades"].set(len(self.open_trades))
+        self.metrics["trades_closed"].inc()
+        self.log.info("Trade %s closed PnL=%s", trade_id, profit_loss)
+
+    # ------------------------------------------------------------------
+    def process_daily_reset(self) -> None:
+        """Public wrapper for :func:`_reset_daily`."""
+        self._reset_daily()
+
+    # ------------------------------------------------------------------
+    def apply_trailing_stop(self, trade_id: str, price: float) -> Optional[float]:
+        """Move stop loss if trade uses trailing stop."""
+        info = self.open_trades.get(trade_id)
+        if not info or not info.trailing:
+            return None
+        # TODO: refine trailing stop logic
+        return info.sl
