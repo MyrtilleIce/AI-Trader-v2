@@ -8,6 +8,8 @@ from typing import Optional
 import pandas as pd
 from ta.momentum import RSIIndicator
 
+from .notifications import NOTIFIER
+
 
 class Strategy:
     """Compute technical indicators and generate trade signals."""
@@ -34,11 +36,29 @@ class Strategy:
         prev = df.iloc[-2] if len(df) > 1 else df.iloc[-1]
 
         # MA cross strategy with RSI filter
-        if prev["ma20"] <= prev["ma50"] and latest["ma20"] > latest["ma50"] and latest["rsi14"] < 70:
+        if (
+            prev["ma20"] <= prev["ma50"]
+            and latest["ma20"] > latest["ma50"]
+            and latest["rsi14"] < 70
+        ):
             self.log.info("Bullish crossover detected")
+            NOTIFIER.notify(
+                "indicator_ma_cross",
+                "Bullish MA20/MA50 crossover with RSI < 70",
+                level="INFO",
+            )
             return "buy"
-        if prev["ma20"] >= prev["ma50"] and latest["ma20"] < latest["ma50"] and latest["rsi14"] > 30:
+        if (
+            prev["ma20"] >= prev["ma50"]
+            and latest["ma20"] < latest["ma50"]
+            and latest["rsi14"] > 30
+        ):
             self.log.info("Bearish crossover detected")
+            NOTIFIER.notify(
+                "indicator_ma_cross",
+                "Bearish MA20/MA50 crossover with RSI > 30",
+                level="INFO",
+            )
             return "sell"
         return None
 

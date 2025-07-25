@@ -12,6 +12,8 @@ from typing import List
 import pandas as pd
 import requests
 
+from .notifications import NOTIFIER
+
 
 @dataclass
 class Candle:
@@ -64,6 +66,11 @@ class DataHandler:
             return df
         except Exception as exc:  # pylint: disable=broad-except
             self.log.error("Failed to fetch candles: %s", exc)
+            NOTIFIER.notify(
+                "data_error",
+                f"Failed to fetch candles for {self.symbol}: {exc}",
+                level="WARNING",
+            )
             return pd.DataFrame(columns=[
                 "timestamp", "open", "high", "low", "close", "volume"
             ])
