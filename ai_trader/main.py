@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -13,8 +14,8 @@ from .data_handler import DataHandler
 from .execution import BitgetExecution
 from .learning import Researcher
 from .memory import Memory
-from .risk import RiskManager
 from .notifications import NOTIFIER
+from .risk_manager import RiskManager
 from .strategy import Strategy
 
 logging.basicConfig(
@@ -29,7 +30,7 @@ logging.basicConfig(
 load_dotenv()
 
 
-def run_bot(run_once: bool = True) -> None:
+async def run_bot(run_once: bool = True) -> None:
     """Run a single trading cycle when ``run_once`` is ``True``."""
     symbol = os.getenv("SYMBOL", "BTCUSDT")
     leverage = int(os.getenv("LEVERAGE", "10"))
@@ -46,7 +47,7 @@ def run_bot(run_once: bool = True) -> None:
 
     while True:
         step += 1
-        df = data_handler.fetch_candles()
+        df = await asyncio.to_thread(data_handler.fetch_candles)
         df = strategy.apply_indicators(df)
         signal = strategy.generate_signal(df)
 
@@ -55,7 +56,8 @@ def run_bot(run_once: bool = True) -> None:
             sl, tp = risk.dynamic_sl_tp(price, signal)
             size = risk.position_size(price)
             logging.info("Calculated position size: %s", size)
-            executor.place_order(
+            await asyncio.to_thread(
+                executor.place_order,
                 symbol,
                 size,
                 signal,
@@ -63,7 +65,7 @@ def run_bot(run_once: bool = True) -> None:
                 tp=tp,
                 leverage=leverage,
             )
-            memory.record(
+            await memory.async_record(
                 {
                     "timestamp": int(time.time()),
                     "side": signal,
@@ -75,17 +77,17 @@ def run_bot(run_once: bool = True) -> None:
 
         # optional learning
         if step % (60 * 24) == 0:  # once a day assuming loop every minute
-            tips = researcher.search("crypto trading strategy")
-            summary = researcher.summarize(tips)
+            tips = await asyncio.to_thread(researcher.search, "crypto trading strategy")
+            summary = await asyncio.to_thread(researcher.summarize, tips)
             logging.getLogger("Research").info("Daily summary: %s", summary)
-            memory.send_daily_summary()
+            await asyncio.to_thread(memory.send_daily_summary)
 
         model.train(df)
 
         if run_once:
             break
 
-        time.sleep(60)
+        await asyncio.sleep(60)
 
     logging.info("Execution finished")
     NOTIFIER.notify("bot_stop", "Execution finished", level="INFO")
@@ -93,7 +95,7 @@ def run_bot(run_once: bool = True) -> None:
 
 def main() -> None:
     """Entry point used when the module is executed as a script."""
-    run_bot(run_once=True)
+    asyncio.run(run_bot(run_once=True))
 
 
 if __name__ == "__main__":

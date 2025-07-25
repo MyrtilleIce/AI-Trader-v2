@@ -61,4 +61,3 @@ class Strategy:
             )
             return "sell"
         return None
-

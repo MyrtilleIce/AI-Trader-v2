@@ -10,7 +10,6 @@ from typing import Any, Dict, Optional
 import requests
 
 from .notifications import NOTIFIER
-
 from .utils.security import auth_headers
 
 
@@ -23,6 +22,30 @@ class BitgetExecution:
         self.session = requests.Session()
         self.log = logging.getLogger(self.__class__.__name__)
         self._fail_count = 0
+
+    # ------------------------------------------------------------------
+    def _request(
+        self, method: str, url: str, **kwargs
+    ) -> Optional[requests.Response]:
+        """Perform an HTTP request with basic retry logic."""
+        for attempt in range(3):
+            try:
+                response = self.session.request(
+                    method, url, timeout=10, **kwargs
+                )
+                response.raise_for_status()
+                self._fail_count = 0
+                return response
+            except requests.RequestException as exc:  # noqa: BLE001
+                self._fail_count += 1
+                self.log.warning("API request failed (%s): %s", attempt + 1, exc)
+                time.sleep(1)
+        NOTIFIER.notify(
+            "api_failure",
+            "Repeated API failures while contacting Bitget",
+            level="CRITICAL",
+        )
+        return None
 
     # --- utility methods -------------------------------------------------
     @staticmethod
@@ -38,23 +61,12 @@ class BitgetExecution:
         params = f"symbol={symbol}&marginCoin=USDT"
         url = f"{self.BASE_URL}{endpoint}?{params}"
         headers = self._headers("GET", endpoint, params)
-        try:
-            response = self.session.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            self.log.debug("Account data: %s", data)
-            self._fail_count = 0
-            return data.get("data", {})
-        except Exception as exc:  # pylint: disable=broad-except
-            self.log.error("Account fetch failed: %s", exc)
-            self._fail_count += 1
-            if self._fail_count >= 3:
-                NOTIFIER.notify(
-                    "api_failure",
-                    "Repeated API failures when fetching account data",
-                    level="CRITICAL",
-                )
+        response = self._request("GET", url, headers=headers)
+        if not response:
             return None
+        data = response.json()
+        self.log.debug("Account data: %s", data)
+        return data.get("data", {})
 
     def available_balance(self, symbol: str) -> float:
         """Convenience method to get available USDT balance for a symbol."""
@@ -93,26 +105,15 @@ class BitgetExecution:
             payload["presetTakeProfitPrice"] = tp
         params = json.dumps(payload)
         headers = self._headers("POST", endpoint, params)
-        try:
-            response = self.session.post(url, headers=headers, data=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            self.log.info("Order response: %s", data)
-            self._fail_count = 0
-            if data.get("priceAvg"):
-                NOTIFIER.notify(
-                    "order_executed",
-                    f"Order executed avg price {data['priceAvg']}",
-                    level="INFO",
-                )
-            return data
-        except Exception as exc:  # pylint: disable=broad-except
-            self.log.error("Order failed: %s", exc)
-            self._fail_count += 1
-            if self._fail_count >= 3:
-                NOTIFIER.notify(
-                    "api_failure",
-                    "Repeated API failures when placing orders",
-                    level="CRITICAL",
-                )
+        response = self._request("POST", url, headers=headers, data=params)
+        if not response:
             return None
+        data = response.json()
+        self.log.info("Order response: %s", data)
+        if data.get("priceAvg"):
+            NOTIFIER.notify(
+                "order_executed",
+                f"Order executed avg price {data['priceAvg']}",
+                level="INFO",
+            )
+        return data
