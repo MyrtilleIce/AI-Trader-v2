@@ -19,6 +19,26 @@ risk:
   # enable trailing stop feature
   trailing_stop: false
 
+notifications:
+  ratelimit: 60  # seconds
+  channels:
+    coinstats:
+      enabled: true
+      api_key: YOUR_COINSTATS_KEY
+      webhook_url: https://coinstats.app/webhook
+    telegram:
+      enabled: false
+      token: YOUR_BOT_TOKEN
+      chat_id: YOUR_CHAT_ID
+    email:
+      enabled: false
+      smtp_host: smtp.example.com
+      smtp_port: 587
+      username: user@example.com
+      password: pass
+      from: trader@example.com
+      to: you@example.com
+
 learning:
   optuna_trials: 50
   model_path: model.h5

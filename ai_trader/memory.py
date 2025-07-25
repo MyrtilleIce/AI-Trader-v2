@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 from typing import Dict, List
 
+from .notifications import NOTIFIER
+
 
 class Memory:
     """Handle trade history storage."""
@@ -29,4 +31,18 @@ class Memory:
         with self.path.open() as csvfile:
             reader = csv.DictReader(csvfile)
             return list(reader)
+
+    # ------------------------------------------------------------------
+    def send_daily_summary(self) -> None:
+        """Compute daily PnL summary and send notification."""
+        rows = self.load()
+        if not rows:
+            return
+        pnl = sum(float(r["pnl"]) for r in rows)
+        NOTIFIER.notify(
+            "daily_summary",
+            f"Daily PnL: {pnl:.2f} across {len(rows)} trades",
+            level="INFO",
+        )
+        # TODO: implement weekly summary with success rate and drawdown stats
 

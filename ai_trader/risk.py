@@ -6,6 +6,7 @@ import logging
 from typing import Tuple
 
 from .execution import BitgetExecution
+from .notifications import NOTIFIER
 
 
 class RiskManager:
@@ -23,6 +24,18 @@ class RiskManager:
         self.leverage = leverage
         self.portion = portion
         self.log = logging.getLogger(self.__class__.__name__)
+        self._last_qty: float = 0.0
+
+    # ------------------------------------------------------------------
+    def update_portion(self, portion: float) -> None:
+        """Update risk portion and notify of the change."""
+        old = self.portion
+        self.portion = portion
+        NOTIFIER.notify(
+            "risk_level_change",
+            f"Risk portion changed from {old:.2f} to {portion:.2f}",
+            level="INFO",
+        )
 
     def get_available_balance(self) -> float:
         """Fetch available USDT balance for the configured symbol."""
@@ -41,6 +54,13 @@ class RiskManager:
             self.portion,
             qty,
         )
+        if qty != self._last_qty:
+            NOTIFIER.notify(
+                "position_size_change",
+                f"New position size {qty:.4f} (prev {self._last_qty:.4f})",
+                level="INFO",
+            )
+            self._last_qty = qty
         return max(qty, 0.0)
 
     @staticmethod

@@ -14,6 +14,7 @@ from .execution import BitgetExecution
 from .learning import Researcher
 from .memory import Memory
 from .risk import RiskManager
+from .notifications import NOTIFIER
 from .strategy import Strategy
 
 logging.basicConfig(
@@ -77,6 +78,7 @@ def run_bot(run_once: bool = True) -> None:
             tips = researcher.search("crypto trading strategy")
             summary = researcher.summarize(tips)
             logging.getLogger("Research").info("Daily summary: %s", summary)
+            memory.send_daily_summary()
 
         model.train(df)
 
@@ -86,6 +88,7 @@ def run_bot(run_once: bool = True) -> None:
         time.sleep(60)
 
     logging.info("Execution finished")
+    NOTIFIER.notify("bot_stop", "Execution finished", level="INFO")
 
 
 def main() -> None:

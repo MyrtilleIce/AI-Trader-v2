@@ -14,6 +14,7 @@ import yaml
 from prometheus_client import Counter, Gauge
 
 from .execution import BitgetExecution
+from .notifications import NOTIFIER
 
 
 @dataclass
@@ -108,6 +109,11 @@ class RiskManager:
         )
         if not allowed:
             self.log.warning("Daily drawdown limit reached")
+            NOTIFIER.notify(
+                "trading_halt",
+                "Automatic trading halted: daily drawdown limit reached",
+                level="WARNING",
+            )
         return allowed
 
     # ------------------------------------------------------------------
@@ -148,6 +154,12 @@ class RiskManager:
         self.open_trades[trade_id] = TradeInfo(risk=risk, sl=sl, tp=tp, trailing=ts)
         self.metrics["open_trades"].set(len(self.open_trades))
         self.metrics["trades_opened"].inc()
+        if len(self.open_trades) > 5:
+            NOTIFIER.notify(
+                "over_exposure",
+                f"Too many open trades: {len(self.open_trades)}",
+                level="WARNING",
+            )
 
     # ------------------------------------------------------------------
     def update_closed_trade(self, trade_id: str, profit_loss: float) -> None:
@@ -159,6 +171,11 @@ class RiskManager:
         self.metrics["open_trades"].set(len(self.open_trades))
         self.metrics["trades_closed"].inc()
         self.log.info("Trade %s closed PnL=%s", trade_id, profit_loss)
+        NOTIFIER.notify(
+            "trade_closed",
+            f"Trade {trade_id} closed with PnL {profit_loss:.2f}",
+            level="INFO",
+        )
 
     # ------------------------------------------------------------------
     def process_daily_reset(self) -> None:
