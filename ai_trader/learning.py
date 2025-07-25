@@ -1,4 +1,4 @@
-"""Automatic strategy improvement via web research."""
+"""Learning utilities including web research and optimisation."""
 
 from __future__ import annotations
 
@@ -6,8 +6,12 @@ import logging
 from typing import List
 
 import openai
+import optuna
+import pandas as pd
 import requests
 from dotenv import dotenv_values
+from keras.layers import Dense
+from keras.models import Sequential
 
 
 class Researcher:
@@ -20,7 +24,6 @@ class Researcher:
         self.log = logging.getLogger(self.__class__.__name__)
 
     def search(self, query: str, num_results: int = 5) -> List[str]:
-        """Search Google and return result snippets."""
         url = "https://serpapi.com/search.json"
         params = {"q": query, "num": num_results, "api_key": self.serp_key}
         try:
@@ -28,12 +31,11 @@ class Researcher:
             res.raise_for_status()
             data = res.json()
             return [item.get("snippet", "") for item in data.get("organic_results", [])]
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             self.log.error("Search failed: %s", exc)
             return []
 
     def summarize(self, texts: List[str]) -> str:
-        """Summarize texts using OpenAI."""
         prompt = "\n".join(texts)
         try:
             completion = openai.ChatCompletion.create(
@@ -42,7 +44,47 @@ class Researcher:
                 max_tokens=150,
             )
             return completion.choices[0].message["content"]
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:  # noqa: BLE001
             self.log.error("Summarization failed: %s", exc)
             return ""
 
+
+class AutoOptimizer:
+    """Simple daily Optuna optimisation of strategy parameters."""
+
+    def __init__(self, trials: int = 50) -> None:
+        self.trials = trials
+        self.log = logging.getLogger(self.__class__.__name__)
+
+    def optimise(self, data: pd.DataFrame) -> None:
+        def objective(trial: optuna.Trial) -> float:
+            threshold = trial.suggest_float("threshold", 0.1, 1.0)
+            window = trial.suggest_int("window", 10, 50)
+            # TODO: backtest with given parameters
+            return 0.0
+
+        try:
+            study = optuna.create_study(direction="maximize")
+            study.optimize(objective, n_trials=self.trials)
+            self.log.info("Best params: %s", study.best_params)
+        except Exception as exc:  # noqa: BLE001
+            self.log.error("Optimisation failed: %s", exc)
+
+
+class DenseModel:
+    """Optional neural network for short-term prediction."""
+
+    def __init__(self, input_dim: int, model_path: str = "model.h5") -> None:
+        self.model_path = model_path
+        self.model = Sequential(
+            [Dense(32, activation="relu", input_shape=(input_dim,)), Dense(1)]
+        )
+        self.model.compile(optimizer="adam", loss="mse")
+        self.log = logging.getLogger(self.__class__.__name__)
+
+    def train(self, X: pd.DataFrame, y: pd.Series) -> None:
+        self.model.fit(X, y, epochs=10, verbose=0)
+        self.model.save(self.model_path)
+
+    def predict(self, X: pd.DataFrame) -> List[float]:
+        return self.model.predict(X, verbose=0).flatten().tolist()
