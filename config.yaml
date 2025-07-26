@@ -1,44 +1,187 @@
+# Configuration optimisée AI Trader v2.0
+# Production-ready settings pour trading BTC/USDT Futures
+
 bitget:
   symbol: BTCUSDT
   product_type: umcbl
   leverage: 10
+  max_positions: 3
+  base_url: "https://api.bitget.com"
+  websocket_url: "wss://ws.bitget.com/v2/ws/public"
 
 strategy:
-  portion: 0.1
-  threshold: 0.3
+  mode: "enhanced"
+  confluence_threshold: 0.75
+  session_multipliers:
+    asian: 0.8
+    european: 1.2
+    american: 1.5
+  indicators:
+    ema_short: 12
+    ema_long: 26
+    ema_trend: 50
+    rsi_period: 14
+    rsi_oversold: 30
+    rsi_overbought: 70
+    bb_period: 20
+    bb_std_dev: 2
+    macd_fast: 12
+    macd_slow: 26
+    macd_signal: 9
+    atr_period: 14
+    volume_sma: 20
+  signal_weights:
+    trend: 0.30
+    momentum: 0.25
+    macd: 0.20
+    bollinger: 0.15
+    volume: 0.10
 
 risk:
-  # maximum daily drawdown allowed before trading halts
-  max_drawdown: 0.05
-  # risk allocated per trade
-  risk_per_trade: 0.01
-  # ATR multiplier for stop loss calculation
+  max_drawdown_daily: 0.03
+  max_drawdown_weekly: 0.08
+  risk_per_trade: 0.015
+  max_leverage: 10
+  max_positions: 3
   atr_factor: 1.5
-  # minimum risk to reward ratio
   reward_ratio: 2.0
-  # enable trailing stop feature
-  trailing_stop: false
+  trailing_stop: true
+  trailing_step: 0.5
+  max_slippage: 0.001
+  circuit_breaker:
+    max_failures: 5
+    cooldown_minutes: 30
+  kelly_fraction: false
+  fixed_risk: true
+  volatility_adjustment: true
 
-notifications:
-  ratelimit: 60  # seconds
+market_observer:
+  enabled: true
+  update_interval: 300
+  fear_greed_extreme: 20
+  fear_greed_greed: 80
+  funding_rate_high: 0.01
+  funding_rate_negative: -0.005
+  btc_dominance_min: 40
+  sources:
+    fear_greed: "https://api.alternative.me/fng/"
+    btc_dominance: "coingecko"
+    funding_rate: "bitget"
+    open_interest: "bitget"
+
+websocket:
+  enabled: true
+  auto_reconnect: true
+  reconnect_interval: 5
+  ping_interval: 30
+  max_reconnect_attempts: 10
   channels:
-    coinstats:
-      enabled: true
-      api_key: YOUR_COINSTATS_KEY
-      webhook_url: https://coinstats.app/webhook
-    telegram:
-      enabled: false
-      token: YOUR_BOT_TOKEN
-      chat_id: YOUR_CHAT_ID
-    email:
-      enabled: false
-      smtp_host: smtp.example.com
-      smtp_port: 587
-      username: user@example.com
-      password: pass
-      from: trader@example.com
-      to: you@example.com
+    - ticker
+    - candle1m
+    - books
+
+data:
+  timeframes:
+  history_length: 1000
+  update_frequency: 60
+  cache_enabled: true
+  cache_duration: 300
 
 learning:
-  optuna_trials: 50
-  model_path: model.h5
+  enabled: true
+  optimization:
+    enabled: true
+    frequency: "daily"
+    method: "bayesian"
+    trials: 100
+    optimize_params:
+      - confluence_threshold
+      - atr_factor
+      - reward_ratio
+      - risk_per_trade
+  neural_network:
+    enabled: false
+    hidden_layers:
+    dropout: 0.2
+    learning_rate: 0.001
+    epochs: 100
+  external_sources:
+    enabled: false
+    serp_api: true
+    pdf_analysis: true
+    news_sentiment: true
+
+notifications:
+  enabled: true
+  rate_limit: 60
+  channels:
+    telegram:
+      enabled: true
+      bot_token: "${TELEGRAM_BOT_TOKEN}"
+      chat_id: "${TELEGRAM_CHAT_ID}"
+    email:
+      enabled: false
+      smtp_server: "smtp.gmail.com"
+      smtp_port: 587
+      username: "${EMAIL_USERNAME}"
+      password: "${EMAIL_PASSWORD}"
+      to_email: "${EMAIL_TO}"
+    coinstat:
+      enabled: false
+      webhook_url: "${COINSTAT_WEBHOOK}"
+  events:
+    trade_opened: true
+    trade_closed: true
+    profit_target: true
+    stop_loss: true
+    drawdown_warning: true
+    api_errors: true
+    system_status: true
+    daily_summary: true
+
+security:
+  encrypt_keys: true
+  rate_limiting:
+    enabled: true
+    max_requests_per_minute: 60
+  circuit_breaker:
+    enabled: true
+    failure_threshold: 5
+    recovery_timeout: 60
+  security_audit: true
+  log_sensitive_data: false
+
+database:
+  type: "sqlite"
+  path: "data/trading_data.db"
+  backup_enabled: true
+  backup_frequency: "daily"
+  retention_days: 90
+
+monitoring:
+  dashboard:
+    enabled: true
+    host: "0.0.0.0"
+    port: 5000
+  prometheus:
+    enabled: false
+    port: 8000
+  logging:
+    level: "INFO"
+    file: "logs/ai_trader.log"
+    max_size: "100MB"
+    backup_count: 5
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+backtesting:
+  enabled: true
+  data_source: "binance"
+  default_timeframe: "1h"
+  commission: 0.0005
+  slippage: 0.0001
+
+development:
+  debug_mode: false
+  paper_trading: false
+  mock_api: false
+  save_all_data: false
