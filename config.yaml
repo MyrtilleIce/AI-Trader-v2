@@ -117,8 +117,8 @@ notifications:
   channels:
     telegram:
       enabled: true
-      bot_token: "${TELEGRAM_BOT_TOKEN}"
-      chat_id: "${TELEGRAM_CHAT_ID}"
+      bot_token: "8121083065:AAFMXO2XP2oiQ24PzqyhKGfkn5bFFhDr4gk"
+      chat_id: "5398631310"
     email:
       enabled: false
       smtp_server: "smtp.gmail.com"
