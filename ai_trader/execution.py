@@ -86,6 +86,8 @@ class BitgetExecution:
         sl: Optional[float] = None,
         tp: Optional[float] = None,
         leverage: int = 10,
+        expected_price: float | None = None,
+        risk_manager: Optional["RiskManager"] = None,
     ) -> Optional[Dict[str, str]]:
         """Place a market order with optional SL/TP."""
         endpoint = "/api/mix/v1/order/place-order"
@@ -111,6 +113,8 @@ class BitgetExecution:
         data = response.json()
         self.log.info("Order response: %s", data)
         if data.get("priceAvg"):
+            if expected_price and risk_manager and not risk_manager.check_slippage(expected_price, float(data["priceAvg"])):
+                NOTIFIER.notify("slippage_warning", "High slippage detected", level="WARNING")
             NOTIFIER.notify(
                 "order_executed",
                 f"Order executed avg price {data['priceAvg']}",

@@ -51,6 +51,9 @@ class RiskManager:
         self.reward_ratio = float(
             os.getenv("REWARD_RATIO", risk_cfg.get("reward_ratio", 2.0))
         )
+        self.max_slippage = float(
+            os.getenv("MAX_SLIPPAGE", risk_cfg.get("max_slippage", 0.001))
+        )
         self.trailing_stop_enabled = bool(
             strtobool(
                 os.getenv("TRAILING_STOP", str(risk_cfg.get("trailing_stop", False)))
@@ -200,6 +203,16 @@ class RiskManager:
     def process_daily_reset(self) -> None:
         """Public wrapper for :func:`_reset_daily`."""
         self._reset_daily()
+
+    def check_slippage(self, expected_price: float, actual_price: float) -> bool:
+        """Return True if slippage within acceptable bounds."""
+        if expected_price == 0:
+            return True
+        diff = abs(actual_price - expected_price) / expected_price
+        allowed = diff <= self.max_slippage
+        if not allowed:
+            self.log.warning("Slippage %.5f exceeds limit %.5f", diff, self.max_slippage)
+        return allowed
 
     # ------------------------------------------------------------------
     def apply_trailing_stop(self, trade_id: str, price: float) -> Optional[float]:

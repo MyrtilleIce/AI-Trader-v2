@@ -75,3 +75,12 @@ class DataHandler:
             for item in data.get("data", [])
         ]
         return pd.DataFrame([c.__dict__ for c in candles])
+
+    async def websocket_stream(self, queue, channels=None):
+        """Stream real time data using :class:`BitgetWebSocket`."""
+        from .bitget_websocket import BitgetWebSocket
+
+        channels = channels or ["ticker"]
+        ws = BitgetWebSocket(self.symbol, channels)
+        async for msg in ws.connect():
+            await queue.put(msg)
