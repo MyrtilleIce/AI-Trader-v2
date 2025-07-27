@@ -112,10 +112,14 @@ class RiskManager:
         )
         if not allowed:
             self.log.warning("Daily drawdown limit reached")
+            dd_pct = 0.0
+            if self.start_balance:
+                dd_pct = abs(self.daily_pnl) / self.start_balance * 100
             NOTIFIER.notify(
                 "trading_halt",
                 "Automatic trading halted: daily drawdown limit reached",
                 level="WARNING",
+                drawdown_pct=dd_pct,
             )
         return allowed
 
@@ -197,6 +201,7 @@ class RiskManager:
             "trade_closed",
             f"Trade {trade_id} closed with PnL {profit_loss:.2f}",
             level="INFO",
+            pnl=profit_loss,
         )
 
     # ------------------------------------------------------------------

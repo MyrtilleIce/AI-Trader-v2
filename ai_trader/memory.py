@@ -50,9 +50,18 @@ class Memory:
         if not rows:
             return
         pnl = sum(float(r["pnl"]) for r in rows)
+        wins = sum(1 for r in rows if float(r["pnl"]) > 0)
+        losses = sum(1 for r in rows if float(r["pnl"]) <= 0)
+        winrate = (wins / len(rows)) * 100 if rows else 0
         NOTIFIER.notify(
             "daily_summary",
             f"Daily PnL: {pnl:.2f} across {len(rows)} trades",
             level="INFO",
+            pnl=pnl,
+            win=wins,
+            loss=losses,
+            winrate=winrate,
+            max_dd=0,
+            period="journalier",
         )
         # TODO: implement weekly summary with success rate and drawdown stats
