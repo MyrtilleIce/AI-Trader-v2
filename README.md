@@ -35,3 +35,16 @@ Run the unit tests with:
 ```bash
 python -m unittest
 ```
+
+## Git configuration
+
+Set up your Git identity to use the correct email for commits:
+
+```bash
+git config --global user.email "perraultsacha@gmail.com"
+git config user.email "perraultsacha@gmail.com"
+```
+
+In Visual Studio Code you can update this via *Preferences: Open Settings (UI)*,
+search for **git user email**, and enter `perraultsacha@gmail.com`. Alternatively
+use the command palette (`Ctrl+Shift+P`) and select **Git: Set User Email**.
