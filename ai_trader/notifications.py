@@ -15,6 +15,8 @@ import os
 import smtplib
 import time
 from dataclasses import dataclass
+import datetime as dt
+from collections import defaultdict
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Dict, Optional
@@ -92,7 +94,7 @@ class NotificationManager:
         return False
 
     # ------------------------------------------------------------------
-    def notify(self, event: str, message: str, level: str = "INFO") -> None:
+    def notify(self, event: str, message: str, level: str = "INFO", **kwargs) -> None:
         """Send a notification for ``event`` with ``message``.
 
         Parameters
@@ -110,17 +112,91 @@ class NotificationManager:
 
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
         msg = f"[{level}] {timestamp} - {message}"
+        tg_msg = self._format_telegram_message(event, message, level=level, **kwargs)
 
         sent = False
         if self.channels.get("coinstats") and self.channels["coinstats"].enabled:
             sent |= self._send_coinstats(msg)
         if self.channels.get("telegram") and self.channels["telegram"].enabled:
-            sent |= self._send_telegram(msg)
+            sent |= self._send_telegram(tg_msg)
         if self.channels.get("email") and self.channels["email"].enabled:
             sent |= self._send_email(msg)
 
         if not sent:
             self.log.log(getattr(logging, level, logging.INFO), msg)
+
+    # ------------------------------------------------------------------
+    def _format_telegram_message(self, event: str, message: str, **kwargs) -> str:
+        """Return a nicely formatted Telegram message."""
+        now = dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+        data = defaultdict(str, kwargs)
+        data.setdefault("datetime", now)
+        # round numeric values
+        for key in ["entry_price", "stop_loss", "take_profit", "pnl", "pnl_pct", "drawdown_pct", "winrate", "max_dd"]:
+            if key in data and data[key] != "":
+                try:
+                    data[key] = f"{float(data[key]):.2f}"
+                except (ValueError, TypeError):
+                    pass
+        if "size" in data and data["size"] != "":
+            try:
+                data["size"] = f"{float(data['size']):.4f}"
+            except (ValueError, TypeError):
+                pass
+        if "error" in data:
+            data["error"] = str(data["error"])[:500]
+
+        templates = {
+            "trade_opened": (
+                "🚀 *Nouveau trade ouvert !*\n"
+                "*Sens* : {side}\n"
+                "*Taille* : {size} {symbol}\n"
+                "*Prix d\u2019entr\xe9e* : {entry_price} USDT\n"
+                "*SL* : {stop_loss} / *TP* : {take_profit}\n"
+                "*Horodatage* : {datetime}"
+            ),
+            "trade_closed": (
+                "✅ *Trade clôturé*\n"
+                "*Sens* : {side} | *Résultat* : {pnl} USDT ({pnl_pct}% )\n"
+                "*Durée* : {duration} min\n"
+                "*Motif* : {reason}"
+            ),
+            "error": (
+                "⚠️ *Erreur critique / API*\n"
+                "_Description_ : {error}\n"
+                "*Heure* : {datetime}"
+            ),
+            "drawdown": (
+                "🛑 *Limite de perte journalière atteinte !*\n"
+                "*Drawdown* : {drawdown_pct}%\n"
+                "*Action* : Trading suspendu pour 24h." 
+            ),
+            "summary": (
+                "📊 *Récapitulatif {period}*\n"
+                "PnL total : {pnl} USDT\n"
+                "Trades gagnants : {win} / perdants : {loss}\n"
+                "Winrate : {winrate}%\n"
+                "Max Drawdown : {max_dd}%"
+            ),
+        }
+
+        # Map event names
+        mapping = {
+            "order_executed": "trade_opened",
+            "trade_opened": "trade_opened",
+            "trade_closed": "trade_closed",
+            "trading_halt": "drawdown",
+            "daily_summary": "summary",
+            "api_failure": "error",
+            "data_error": "error",
+        }
+        template_key = mapping.get(event)
+        if not template_key:
+            return f"*{event}*\n{message}"
+        template = templates[template_key]
+        data.setdefault("period", "journalier")
+        data.setdefault("reason", message)
+        return template.format_map(data)
 
     # ------------------------------------------------------------------
     def _send_coinstats(self, message: str) -> bool:
@@ -143,7 +219,11 @@ class NotificationManager:
         if not cfg or not (cfg.token and cfg.chat_id):
             return False
         url = f"https://api.telegram.org/bot{cfg.token}/sendMessage"
-        payload = {"chat_id": cfg.chat_id, "text": message}
+        payload = {
+            "chat_id": cfg.chat_id,
+            "text": message,
+            "parse_mode": "Markdown",
+        }
         try:
             response = requests.post(url, data=payload, timeout=5)
             response.raise_for_status()
