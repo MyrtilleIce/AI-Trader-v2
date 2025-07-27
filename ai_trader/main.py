@@ -21,6 +21,7 @@ from .notifications import NOTIFIER
 from .risk_manager import RiskManager
 from .strategy import Strategy
 from .test_suite import AgentTestSuite
+from .dashboard import run_dashboard
 
 logging.basicConfig(
     level=logging.INFO,
@@ -101,6 +102,35 @@ Commandes disponibles :
     async def perform_startup_checks(self) -> bool:
         return await perform_startup_checks(self.execution, self.config)
 
+    def start_dashboard(self, host: str = "0.0.0.0", port: int = 5000):
+        """Démarrer le dashboard web"""
+        try:
+            dashboard_thread = run_dashboard(self, host=host, port=port)
+            logging.getLogger(__name__).info("Dashboard started on http://%s:%s", host, port)
+            asyncio.create_task(
+                self.notify(
+                    "dashboard_started",
+                    f"""
+🖥️ **Dashboard Web Activé**
+
+📊 Interface : http://{host}:{port}
+🔄 Refresh : 5 secondes
+📱 Responsive : Mobile/Desktop
+
+Fonctionnalités :
+✅ Métriques temps réel
+✅ Graphiques interactifs  
+✅ Contrôles agent
+✅ Historique trades
+✅ Logs système
+                    """,
+                )
+            )
+            return dashboard_thread
+        except Exception as exc:  # noqa: BLE001
+            logging.getLogger(__name__).error("Failed to start dashboard: %s", exc)
+            return None
+
     async def start_main_loop(self) -> None:
         self.main_task = asyncio.create_task(self.main_loop())
 
@@ -145,8 +175,13 @@ Commandes disponibles :
             await asyncio.sleep(60)
 
     async def start(self) -> bool:
+        """Démarrer l'agent avec dashboard"""
         self.is_running = True
         self.start_time = datetime.utcnow()
+
+        # Démarrage du dashboard web
+        self.start_dashboard()
+
         await self.initialize_telegram_control()
         startup_success = await self.perform_startup_checks()
         if startup_success:

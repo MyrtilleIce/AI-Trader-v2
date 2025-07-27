@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Trader Dashboard</title>
+    <!-- CDN Dependencies -->
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom Styles -->
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+</head>
+<body>
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row">
+        <div class="col-12">
+            <nav class="navbar navbar-dark bg-dark mb-4">
+                <div class="container-fluid">
+                    <span class="navbar-brand mb-0 h1">
+                        <i class="fas fa-robot"></i> AI-Trader Dashboard
+                    </span>
+                    <div class="d-flex">
+                        <span id="connection-status" class="badge bg-secondary me-2">Connecting...</span>
+                        <span id="last-update" class="text-muted small">Never</span>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Metrics Cards -->
+    <div class="row mb-4" id="metrics-cards">
+        <!-- Cards seront générées dynamiquement -->
+    </div>
+
+    <!-- Controls -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <h5><i class="fas fa-cogs"></i> Contrôles Agent</h5>
+                </div>
+                <div class="card-body">
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-success" onclick="controlAgent('start')">
+                            <i class="fas fa-play"></i> Start
+                        </button>
+                        <button type="button" class="btn btn-warning" onclick="controlAgent('stop')">
+                            <i class="fas fa-stop"></i> Stop
+                        </button>
+                        <button type="button" class="btn btn-info" onclick="controlAgent('restart')">
+                            <i class="fas fa-redo"></i> Restart
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="controlAgent('test')">
+                            <i class="fas fa-vial"></i> Tests
+                        </button>
+                        <button type="button" class="btn btn-danger" onclick="controlAgent('emergency_stop')">
+                            <i class="fas fa-exclamation-triangle"></i> Emergency
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-line"></i> Equity Curve (24h)</h5>
+                </div>
+                <div class="card-body">
+                    <div id="equity-chart" style="height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-bar"></i> Performance (7j)</h5>
+                </div>
+                <div class="card-body">
+                    <div id="performance-chart" style="height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tables -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-pie"></i> Positions Ouvertes</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-striped table-sm" id="positions-table">
+                            <thead>
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th>Side</th>
+                                    <th>Size</th>
+                                    <th>Entry</th>
+                                    <th>PnL</th>
+                                    <th>%</th>
+                                </tr>
+                            </thead>
+                            <tbody id="positions-tbody">
+                                <tr><td colspan="6" class="text-center text-muted">Aucune position</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <h5><i class="fas fa-history"></i> Trades Récents</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-striped table-sm" id="trades-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Side</th>
+                                    <th>Entry</th>
+                                    <th>Exit</th>
+                                    <th>PnL</th>
+                                    <th>%</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trades-tbody">
+                                <tr><td colspan="6" class="text-center text-muted">Aucun trade</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <h5><i class="fas fa-terminal"></i> Logs Récents</h5>
+                </div>
+                <div class="card-body">
+                    <div id="logs-container" style="height: 300px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 0.85em;">
+                        <div class="text-muted">Chargement des logs...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Notifications -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="notification-toast" class="toast" role="alert">
+        <div class="toast-header">
+            <strong class="me-auto">AI-Trader</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body" id="toast-message">
+            Message
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Custom JavaScript -->
+<script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>
