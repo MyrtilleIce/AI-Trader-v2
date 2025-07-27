@@ -7,6 +7,7 @@ import logging
 import os
 import time
 from pathlib import Path
+from datetime import datetime
 
 from dotenv import load_dotenv
 import yaml
@@ -19,6 +20,7 @@ from .memory import Memory
 from .notifications import NOTIFIER
 from .risk_manager import RiskManager
 from .strategy import Strategy
+from .test_suite import AgentTestSuite
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,6 +32,138 @@ logging.basicConfig(
 )
 
 load_dotenv()
+
+
+class TradingAgent:
+    """High level trading agent with Telegram control."""
+
+    def __init__(self, config_file: str = "config.yaml") -> None:
+        config_path = Path(config_file)
+        self.config = yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
+
+        self.symbol = self.config.get("bitget", {}).get("symbol", "BTCUSDT")
+        self.leverage = int(self.config.get("bitget", {}).get("leverage", 10))
+
+        self.data_handler = DataHandler(self.symbol)
+        self.strategy = Strategy()
+        self.execution = BitgetExecution()
+        self.risk_manager = RiskManager(self.execution, self.symbol, self.leverage)
+        self.memory = Memory()
+        self.model = SimpleModel()
+        self.researcher = Researcher()
+
+        self.notification_manager = NOTIFIER
+        self.notification_manager.agent = self
+        self.is_running = False
+        self.start_time: datetime | None = None
+
+    # ------------------------------------------------------------------
+    async def notify(self, event: str, message: str) -> None:
+        self.notification_manager.notify(event, message)
+
+    async def initialize_telegram_control(self) -> None:
+        if hasattr(self.notification_manager, "setup_telegram_polling"):
+            self.notification_manager.agent = self
+            self.notification_manager.setup_telegram_polling()
+            await self.notify(
+                "telegram_control_ready",
+                """
+🎮 Contrôle Telegram Activé
+Commandes disponibles :
+* /start - Démarrer trading
+* /stop - Arrêter trading
+* /status - Voir status
+* /test - Lancer tests
+* /help - Liste complète
+🔐 Seul votre chat est autorisé
+""",
+            )
+
+    async def run_diagnostic_tests(self) -> bool:
+        test_suite = AgentTestSuite(self)
+        results = await test_suite.run_complete_test_suite()
+        all_passed = all(r["passed"] for r in results.values())
+        if all_passed:
+            logging.getLogger(__name__).info("All diagnostic tests passed - Agent ready for trading")
+            await self.notify(
+                "diagnostic_success",
+                "🎯 **Tous les tests passés !**\nAgent prêt pour le trading live.",
+            )
+        else:
+            failed = [n for n, r in results.items() if not r["passed"]]
+            logging.getLogger(__name__).error("Some tests failed: %s", failed)
+            await self.notify(
+                "diagnostic_failure",
+                f"⚠️ **Tests échoués :** {', '.join(failed)}\nCorrections requises avant trading.",
+            )
+        return all_passed
+
+    async def perform_startup_checks(self) -> bool:
+        return await perform_startup_checks(self.execution, self.config)
+
+    async def start_main_loop(self) -> None:
+        self.main_task = asyncio.create_task(self.main_loop())
+
+    async def main_loop(self) -> None:
+        step = 0
+        while self.is_running:
+            step += 1
+            df = await asyncio.to_thread(self.data_handler.fetch_candles)
+            df = self.strategy.apply_indicators(df)
+            signal = self.strategy.generate_signal(df)
+
+            if signal:
+                price = df.iloc[-1]["close"]
+                sl, tp = self.risk_manager.dynamic_sl_tp(price, signal)
+                size = self.risk_manager.position_size(price)
+                await asyncio.to_thread(
+                    self.execution.place_order,
+                    self.symbol,
+                    size,
+                    signal,
+                    sl=sl,
+                    tp=tp,
+                    leverage=self.leverage,
+                )
+                await self.memory.async_record(
+                    {
+                        "timestamp": int(time.time()),
+                        "side": signal,
+                        "price": price,
+                        "qty": size,
+                        "pnl": 0.0,
+                    }
+                )
+
+            if step % (60 * 24) == 0:
+                tips = await asyncio.to_thread(self.researcher.search, "crypto trading strategy")
+                summary = await asyncio.to_thread(self.researcher.summarize, tips)
+                logging.getLogger("Research").info("Daily summary: %s", summary)
+                await asyncio.to_thread(self.memory.send_daily_summary)
+
+            self.model.train(df)
+            await asyncio.sleep(60)
+
+    async def start(self) -> bool:
+        self.is_running = True
+        self.start_time = datetime.utcnow()
+        await self.initialize_telegram_control()
+        startup_success = await self.perform_startup_checks()
+        if startup_success:
+            await self.start_main_loop()
+            return True
+        self.is_running = False
+        return False
+
+    async def stop(self) -> None:
+        self.is_running = False
+        if hasattr(self, "main_task"):
+            self.main_task.cancel()
+        await self.notify("agent_stopped", "🛑 Agent arrêté proprement")
+
+    async def emergency_stop(self) -> None:
+        await self.notify("emergency_stop", "🚨 ARRÊT D'URGENCE - Fermeture positions...")
+        await self.stop()
 
 
 async def perform_startup_checks(executor: BitgetExecution, config: dict) -> bool:
@@ -200,7 +334,8 @@ async def run_bot(run_once: bool = True) -> None:
 
 def main() -> None:
     """Entry point used when the module is executed as a script."""
-    asyncio.run(run_bot(run_once=True))
+    agent = TradingAgent()
+    asyncio.run(agent.start())
 
 
 if __name__ == "__main__":
