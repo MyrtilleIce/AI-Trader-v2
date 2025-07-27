@@ -11,6 +11,7 @@ providers (Slack, Discord...) in the future (see TODOs).
 from __future__ import annotations
 
 import logging
+import asyncio
 import os
 import smtplib
 import time
@@ -278,6 +279,66 @@ class NotificationManager:
             return True
         except Exception as exc:  # pylint: disable=broad-except
             self.log.error("Email notification failed: %s", exc)
+            return False
+
+    # ------------------------------------------------------------------
+    def setup_telegram_polling(self) -> None:
+        """Initialize Telegram command polling."""
+        from .telegram_controller import TelegramController
+
+        self.telegram_controller = TelegramController(getattr(self, "agent", None), self)
+
+        authorized_chat_id = self.channels.get("telegram", {}).chat_id
+        if authorized_chat_id:
+            self.telegram_controller.add_authorized_user(str(authorized_chat_id))
+
+        asyncio.create_task(self.poll_telegram_messages())
+
+    async def poll_telegram_messages(self) -> None:
+        """Poll Telegram API for commands."""
+        cfg = self.channels.get("telegram")
+        if not cfg or not cfg.token:
+            return
+
+        last_update_id = 0
+        while True:
+            try:
+                url = f"https://api.telegram.org/bot{cfg.token}/getUpdates"
+                params = {
+                    "offset": last_update_id + 1,
+                    "timeout": 10,
+                    "allowed_updates": ["message"],
+                }
+                response = requests.get(url, params=params, timeout=15)
+                data = response.json()
+                if data.get("ok") and data.get("result"):
+                    for update in data["result"]:
+                        last_update_id = update["update_id"]
+                        if "message" in update and "text" in update["message"]:
+                            message_text = update["message"]["text"]
+                            chat_id = str(update["message"]["chat"]["id"])
+                            if message_text.startswith("/"):
+                                await self.telegram_controller.process_telegram_command(message_text, chat_id)
+            except Exception as exc:  # pylint: disable=broad-except
+                self.log.error("Telegram polling error: %s", exc)
+                await asyncio.sleep(30)
+            await asyncio.sleep(1)
+
+    async def _send_telegram_direct(self, message: str, chat_id: str) -> bool:
+        """Send a Telegram message to a specific chat ID."""
+        cfg = self.channels.get("telegram")
+        if not cfg or not cfg.token:
+            return False
+
+        url = f"https://api.telegram.org/bot{cfg.token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
+
+        try:
+            response = requests.post(url, data=payload, timeout=5)
+            response.raise_for_status()
+            return True
+        except Exception as exc:  # pylint: disable=broad-except
+            self.log.error("Direct Telegram send failed: %s", exc)
             return False
 
     # ------------------------------------------------------------------
