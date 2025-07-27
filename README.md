@@ -48,3 +48,16 @@ git config user.email "perraultsacha@gmail.com"
 In Visual Studio Code you can update this via *Preferences: Open Settings (UI)*,
 search for **git user email**, and enter `perraultsacha@gmail.com`. Alternatively
 use the command palette (`Ctrl+Shift+P`) and select **Git: Set User Email**.
+
+## Navigation Troubleshooting
+
+If you cloned the repository but cannot `cd` into the folder, run the diagnostic scripts:
+
+```bash
+python3 fix_directory_navigation.py
+# or
+./find_project.sh
+```
+
+They will search for the `AI-Trader-v2` directory and give you the exact command to navigate to it.
+
