@@ -227,3 +227,107 @@ class RiskManager:
             return None
         # TODO: refine trailing stop logic
         return info.sl
+
+    # ------------------------------------------------------------------
+    def calculate_position_size_with_leverage(
+        self,
+        entry_price: float,
+        stop_loss_price: float,
+        total_balance: float,
+        leverage: int = 10,
+    ) -> Dict[str, float]:
+        """Return position details using 10% capital and given leverage."""
+
+        capital_per_position = total_balance * 0.10
+        required_margin = capital_per_position / leverage
+        position_size = capital_per_position / entry_price
+
+        max_loss = abs(entry_price - stop_loss_price) * position_size
+        max_allowed_loss = total_balance * 0.02
+
+        if max_loss > max_allowed_loss and abs(entry_price - stop_loss_price) > 0:
+            position_size = max_allowed_loss / abs(entry_price - stop_loss_price)
+            max_loss = max_allowed_loss
+
+        return {
+            "position_size": position_size,
+            "required_margin": required_margin,
+            "max_loss": max_loss,
+            "leverage": leverage,
+            "capital_allocated": capital_per_position,
+        }
+
+    # ------------------------------------------------------------------
+    def calculate_liquidation_price(
+        self,
+        entry_price: float,
+        position_size: float,
+        margin: float,
+        leverage: int,
+        side: str = "long",
+    ) -> Dict[str, float]:
+        """Return liquidation price info for a position."""
+
+        maintenance_margin_rate = 0.004
+
+        if position_size == 0:
+            return {
+                "liquidation_price": entry_price,
+                "distance_percentage": 0.0,
+                "is_safe": False,
+            }
+
+        if side == "long":
+            liquidation_price = entry_price * (
+                1 - (margin / position_size - maintenance_margin_rate)
+            )
+        else:
+            liquidation_price = entry_price * (
+                1 + (margin / position_size - maintenance_margin_rate)
+            )
+
+        distance_to_liquidation = abs(entry_price - liquidation_price) / entry_price
+
+        return {
+            "liquidation_price": liquidation_price,
+            "distance_percentage": distance_to_liquidation * 100,
+            "is_safe": distance_to_liquidation > 0.05,
+        }
+
+    # ------------------------------------------------------------------
+    def validate_trade_safety(
+        self,
+        entry_price: float,
+        stop_loss: float,
+        take_profit: float,
+        position_data: Dict[str, float],
+    ) -> Tuple[Dict[str, bool], bool]:
+        """Return detailed safety checks for a proposed trade."""
+
+        checks = {
+            "liquidation_distance": False,
+            "stop_loss_valid": False,
+            "risk_ratio_valid": False,
+            "margin_sufficient": False,
+        }
+
+        liquidation_info = self.calculate_liquidation_price(
+            entry_price,
+            position_data.get("position_size", 0.0),
+            position_data.get("required_margin", 0.0),
+            position_data.get("leverage", self.leverage),
+        )
+        checks["liquidation_distance"] = liquidation_info["is_safe"]
+
+        liquidation_buffer = abs(stop_loss - liquidation_info["liquidation_price"]) / entry_price
+        checks["stop_loss_valid"] = liquidation_buffer > 0.15
+
+        risk = abs(entry_price - stop_loss)
+        reward = abs(take_profit - entry_price)
+        risk_reward_ratio = reward / risk if risk > 0 else 0
+        checks["risk_ratio_valid"] = risk_reward_ratio >= 1.5
+
+        account_balance = self.get_available_balance()
+        checks["margin_sufficient"] = position_data.get("required_margin", 0.0) < account_balance * 0.8
+
+        return checks, all(checks.values())

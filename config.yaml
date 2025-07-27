@@ -3,11 +3,16 @@
 
 bitget:
   symbol: BTCUSDT
-  product_type: umcbl
+  product_type: USDT-FUTURES
   leverage: 10
-  max_positions: 3
+  max_positions: 2
   base_url: "https://api.bitget.com"
   websocket_url: "wss://ws.bitget.com/v2/ws/public"
+
+trading:
+  capital_per_position: 0.10
+  max_total_exposure: 0.20
+  leverage_multiplier: 10
 
 strategy:
   mode: "enhanced"
@@ -38,22 +43,16 @@ strategy:
     volume: 0.10
 
 risk:
-  max_drawdown_daily: 0.03
-  max_drawdown_weekly: 0.08
-  risk_per_trade: 0.015
-  max_leverage: 10
-  max_positions: 3
-  atr_factor: 1.5
-  reward_ratio: 2.0
-  trailing_stop: true
-  trailing_step: 0.5
-  max_slippage: 0.001
-  circuit_breaker:
-    max_failures: 5
-    cooldown_minutes: 30
-  kelly_fraction: false
-  fixed_risk: true
-  volatility_adjustment: true
+  max_loss_per_trade: 0.02
+  max_daily_drawdown: 0.05
+  liquidation_buffer: 0.15
+  margin_safety_ratio: 0.80
+  stop_loss_atr_factor: 1.0
+  take_profit_ratio: 1.8
+  trailing_stop_enabled: true
+  leverage_monitoring: true
+  liquidation_alerts: true
+  margin_call_threshold: 0.80
 
 market_observer:
   enabled: true

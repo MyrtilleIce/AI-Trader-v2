@@ -19,7 +19,7 @@ import datetime as dt
 from collections import defaultdict
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import requests
 import yaml
@@ -197,6 +197,34 @@ class NotificationManager:
         data.setdefault("period", "journalier")
         data.setdefault("reason", message)
         return template.format_map(data)
+
+    # ------------------------------------------------------------------
+    def _format_leverage_alert(self, alert_type: str, data: Dict[str, Any]) -> str:
+        """Return formatted leverage related alert."""
+        templates = {
+            "margin_warning": (
+                "\u26a0\ufe0f Alerte Marge Critique\n"
+                "Marge utilis\u00e9e : {margin_used:.2f}%\n"
+                "Distance liquidation : {liquidation_distance:.2f}%\n"
+                "Action requise : R\u00e9duire exposition ou ajouter marge"
+            ),
+            "high_leverage_trade": (
+                "\ud83d\ude80 Trade Levier x10 Ouvert\n"
+                "Symbole : {symbol}\n"
+                "Taille : {size:.4f} BTC\n"
+                "Capital engag\u00e9 : {capital:.2f} USDT ({capital_pct:.1f}%)\n"
+                "Prix liquidation : {liquidation_price:.2f} USDT\n"
+                "Distance s\u00e9curit\u00e9 : {safety_distance:.2f}%"
+            ),
+            "liquidation_risk": (
+                "\ud83d\udea9 RISQUE DE LIQUIDATION \u00c9LEV\u00c9\n"
+                "Prix actuel : {current_price:.2f}\n"
+                "Prix liquidation : {liquidation_price:.2f}\n"
+                "Distance : {distance:.2f}%\n"
+                "\u26a1\ufe0f ACTION IMM\u00c9DIATE REQUISE"
+            ),
+        }
+        return templates.get(alert_type, f"Alerte {alert_type}: {data}")
 
     # ------------------------------------------------------------------
     def _send_coinstats(self, message: str) -> bool:

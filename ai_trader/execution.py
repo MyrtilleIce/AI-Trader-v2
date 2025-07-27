@@ -8,6 +8,7 @@ import time
 from typing import Any, Dict, Optional
 
 import requests
+import aiohttp
 
 from .notifications import NOTIFIER
 from .utils.security import auth_headers
@@ -127,3 +128,68 @@ class BitgetExecution:
                 take_profit=tp,
             )
         return data
+
+    # ------------------------------------------------------------------
+    async def _make_authenticated_request(
+        self, method: str, endpoint: str, params: Dict[str, Any] | None = None
+    ) -> Dict[str, Any]:
+        """Perform an authenticated HTTP request asynchronously."""
+
+        url = f"{self.BASE_URL}{endpoint}"
+        headers = self._headers(method, endpoint, "")
+
+        async with aiohttp.ClientSession() as session:
+            try:
+                if method.upper() == "GET":
+                    async with session.get(url, params=params, headers=headers, timeout=10) as resp:
+                        return await resp.json()
+                async with session.post(url, json=params, headers=headers, timeout=10) as resp:
+                    return await resp.json()
+            except Exception as exc:  # noqa: BLE001
+                self.log.error("Async request failed: %s", exc)
+                return {}
+
+    # ------------------------------------------------------------------
+    async def set_leverage_x10(self, symbol: str = "BTCUSDT") -> bool:
+        """Configure leverage to 10x for the given symbol."""
+
+        endpoint = "/api/v2/mix/account/set-leverage"
+        params = {
+            "symbol": symbol,
+            "productType": "USDT-FUTURES",
+            "marginCoin": "USDT",
+            "leverage": "10",
+            "holdSide": "long",
+        }
+
+        response = await self._make_authenticated_request("POST", endpoint, params)
+        if response.get("code") == "00000":
+            self.log.info("Leverage set to 10x for %s", symbol)
+            NOTIFIER.notify("leverage_configured", f"✅ Levier configuré à 10x pour {symbol}")
+            return True
+
+        self.log.error("Failed to set leverage: %s", response)
+        NOTIFIER.notify("leverage_error", f"❌ Erreur configuration levier: {response}")
+        return False
+
+    # ------------------------------------------------------------------
+    async def verify_leverage_configuration(self, symbol: str = "BTCUSDT") -> bool:
+        """Check if leverage is correctly set to 10x."""
+
+        endpoint = "/api/v2/mix/account/account"
+        params = {"symbol": symbol, "productType": "USDT-FUTURES", "marginCoin": "USDT"}
+
+        response = await self._make_authenticated_request("GET", endpoint, params)
+        if response.get("code") == "00000":
+            leverage = response.get("data", {}).get("leverage", "1")
+            if str(leverage) == "10":
+                self.log.info("Leverage verification successful: %sx", leverage)
+                return True
+            self.log.warning("Leverage mismatch: expected 10x, got %sx", leverage)
+            return False
+        return False
+
+    # ------------------------------------------------------------------
+    def get_account_balance(self) -> float:
+        """Wrapper to fetch account balance conveniently."""
+        return self.available_balance("BTCUSDT")

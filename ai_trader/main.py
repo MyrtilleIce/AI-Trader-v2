@@ -6,8 +6,10 @@ import asyncio
 import logging
 import os
 import time
+from pathlib import Path
 
 from dotenv import load_dotenv
+import yaml
 
 from .ai_model import SimpleModel
 from .data_handler import DataHandler
@@ -30,6 +32,104 @@ logging.basicConfig(
 load_dotenv()
 
 
+async def perform_startup_checks(executor: BitgetExecution, config: dict) -> bool:
+    """Run startup safety verifications before trading."""
+
+    checks = {
+        "api_connection": False,
+        "leverage_configured": False,
+        "balance_sufficient": False,
+        "risk_parameters": False,
+        "notifications_active": False,
+    }
+
+    try:
+        balance = await asyncio.to_thread(executor.get_account_balance)
+        checks["api_connection"] = balance is not None
+
+        checks["leverage_configured"] = await executor.verify_leverage_configuration()
+        if not checks["leverage_configured"]:
+            await executor.set_leverage_x10()
+            checks["leverage_configured"] = await executor.verify_leverage_configuration()
+
+        if balance is not None:
+            checks["balance_sufficient"] = balance >= 100
+            if balance < 500:
+                NOTIFIER.notify(
+                    "low_balance_warning",
+                    f"\u26a0\ufe0f Solde faible pour levier x10: {balance:.2f} USDT",
+                )
+
+        risk_cfg = config.get("risk", {})
+        checks["risk_parameters"] = all(
+            [
+                risk_cfg.get("max_loss_per_trade", 0) <= 0.02,
+                risk_cfg.get("liquidation_buffer", 0) >= 0.15,
+                risk_cfg.get("leverage_monitoring", False),
+            ]
+        )
+
+        NOTIFIER.notify("startup_check", "\ud83d\udd27 V\u00e9rifications de d\u00e9marrage en cours...")
+        checks["notifications_active"] = True
+
+        all_passed = all(checks.values())
+        status_msg = "\u2705 Toutes les v\u00e9rifications pass\u00e9es" if all_passed else "\u274c Certaines v\u00e9rifications ont \u00e9chou\u00e9"
+
+        NOTIFIER.notify(
+            "startup_complete",
+            f"\n\ud83d\ude80 Agent IA Pr\u00eat - Configuration Levier x10\n{status_msg}",
+        )
+
+        return all_passed
+
+    except Exception as exc:  # noqa: BLE001
+        NOTIFIER.notify("startup_error", f"\u274c Erreur lors des v\u00e9rifications: {exc}")
+        return False
+
+
+async def continuous_safety_monitoring(executor: BitgetExecution, risk: RiskManager) -> None:
+    """Monitor open positions and alert on liquidation risks."""
+
+    while True:
+        try:
+            for trade_id, info in risk.open_trades.items():
+                current_price = await asyncio.to_thread(lambda: 0.0)
+                liquidation_info = risk.calculate_liquidation_price(
+                    current_price,
+                    info.risk,
+                    info.risk,
+                    10,
+                )
+                distance_pct = abs(current_price - liquidation_info["liquidation_price"]) / max(current_price, 1) * 100
+                if distance_pct < 10:
+                    NOTIFIER.notify(
+                        "liquidation_risk",
+                        NOTIFIER._format_leverage_alert(
+                            "liquidation_risk",
+                            {
+                                "current_price": current_price,
+                                "liquidation_price": liquidation_info["liquidation_price"],
+                                "distance": distance_pct,
+                            },
+                        ),
+                    )
+                elif distance_pct < 20:
+                    NOTIFIER.notify(
+                        "margin_warning",
+                        NOTIFIER._format_leverage_alert(
+                            "margin_warning",
+                            {
+                                "margin_used": (info.risk / max(risk.get_available_balance(), 1)) * 100,
+                                "liquidation_distance": distance_pct,
+                            },
+                        ),
+                    )
+            await asyncio.sleep(30)
+        except Exception as exc:  # noqa: BLE001
+            logging.getLogger(__name__).error("Error in safety monitoring: %s", exc)
+            await asyncio.sleep(60)
+
+
 async def run_bot(run_once: bool = True) -> None:
     """Run a single trading cycle when ``run_once`` is ``True``."""
     symbol = os.getenv("SYMBOL", "BTCUSDT")
@@ -42,6 +142,11 @@ async def run_bot(run_once: bool = True) -> None:
     memory = Memory()
     model = SimpleModel()
     researcher = Researcher()
+
+    config_path = Path(os.getenv("CONFIG_FILE", "config.yaml"))
+    config = yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
+    await perform_startup_checks(executor, config)
+    asyncio.create_task(continuous_safety_monitoring(executor, risk))
 
     step = 0
 
