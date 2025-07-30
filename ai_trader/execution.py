@@ -116,8 +116,14 @@ class BitgetExecution:
             if expected_price and risk_manager and not risk_manager.check_slippage(expected_price, float(data["priceAvg"])):
                 NOTIFIER.notify("slippage_warning", "High slippage detected", level="WARNING")
             NOTIFIER.notify(
-                "order_executed",
-                f"Order executed avg price {data['priceAvg']}",
+                "trade_opened",
+                "",
                 level="INFO",
+                side=side,
+                size=size,
+                symbol=symbol,
+                entry_price=float(data["priceAvg"]),
+                stop_loss=sl,
+                take_profit=tp,
             )
         return data
