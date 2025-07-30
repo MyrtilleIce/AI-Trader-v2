@@ -1,0 +1,37 @@
+# AI-Trader-v2 Dependencies - Python 3.13 Compatible
+# Core Data Processing
+pandas>=2.2.3
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Web Framework & API
+flask>=2.3.0
+requests>=2.31.0
+urllib3>=2.0.0
+
+# Visualization
+plotly>=5.15.0
+matplotlib>=3.7.0
+
+# Configuration & Serialization
+pyyaml>=6.0.0
+python-dotenv>=1.0.0
+
+# Cryptocurrency & Trading
+ccxt>=4.0.0
+websocket-client>=1.6.0
+cryptography>=41.0.0
+
+# Async & Networking
+aiohttp>=3.8.0
+asyncio-mqtt>=0.13.0
+
+# Utilities
+python-dateutil>=2.8.0
+pytz>=2023.3
+schedule>=1.2.0
+
+# Development & Testing (Optional)
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+black>=23.7.0
