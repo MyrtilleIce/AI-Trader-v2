@@ -1,0 +1,4 @@
+# Additional constraints for Python 3.11 environments
+tensorflow==2.15.1
+keras==2.15.0
+protobuf==4.25.2

@@ -11,7 +11,29 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import yaml
-from prometheus_client import Counter, Gauge
+
+ENABLE_METRICS_EXPORT = os.getenv("ENABLE_METRICS_EXPORT", "false").lower() == "true"
+
+if ENABLE_METRICS_EXPORT:
+    try:
+        from prometheus_client import Counter, Gauge
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).warning("Prometheus client unavailable: %s", exc)
+        ENABLE_METRICS_EXPORT = False
+
+if not ENABLE_METRICS_EXPORT:
+    class _DummyMetric:
+        def inc(self, *args, **kwargs):
+            return None
+
+        def set(self, *args, **kwargs):
+            return None
+
+    def Counter(*args, **kwargs):  # type: ignore
+        return _DummyMetric()
+
+    def Gauge(*args, **kwargs):  # type: ignore
+        return _DummyMetric()
 
 from .execution import BitgetExecution
 from .notifications import NOTIFIER

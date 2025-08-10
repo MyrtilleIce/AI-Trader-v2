@@ -8,6 +8,11 @@ from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
+
+from .compat import ensure_numpy_compat
+
+ensure_numpy_compat()
+
 import pandas_ta as ta
 
 

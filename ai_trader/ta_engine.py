@@ -6,6 +6,11 @@ import logging
 from typing import Optional
 
 import pandas as pd
+
+from .compat import ensure_numpy_compat
+
+ensure_numpy_compat()
+
 import pandas_ta as ta
 
 

@@ -4,15 +4,52 @@ Autonomous trading agent for Bitget Futures.
 
 ## Setup
 
-1. Install dependencies:
+1. Bootstrap the environment (creates `.venv`, installs deps and runs preflight):
    ```bash
-   pip install -r requirements.txt
+   scripts/bootstrap_dev.sh
    ```
 2. Copy `.env.example` to `.env` and provide your API credentials.
 3. Run the agent:
    ```bash
    python -m ai_trader.main
    ```
+
+### Environment flags
+
+The agent lazily imports heavy optional libraries based on ENV flags:
+
+| Flag | Default | Purpose |
+| ---- | ------- | ------- |
+| `ENABLE_LEARNING` | `true` | Enable Keras/TensorFlow based models |
+| `ENABLE_OPENAI` | `true` | Allow OpenAI powered research |
+| `ENABLE_OPTUNA` | `true` | Enable Optuna optimisation |
+| `ENABLE_METRICS_EXPORT` | `false` | Export Prometheus metrics |
+| `ENABLE_DASHBOARD` | `false` | Start web dashboard |
+
+Unset or set a flag to `false` to avoid importing the corresponding dependency.
+
+Run a preflight check manually with:
+
+```bash
+python -m ai_trader.tools.preflight
+```
+
+### Python versions
+
+TensorFlow may lag behind the latest Python releases. If problems occur with
+Python 3.13 install, use Python 3.11 via `pyenv` and the supplied
+`constraints-3.11.txt` file:
+
+```bash
+pip install -r requirements.txt -c constraints-3.11.txt
+```
+
+### Dependencies
+
+| Category | Packages |
+| -------- | -------- |
+| Required | numpy, pandas, scipy, scikit-learn, Flask, requests, plotly, dash |
+| Optional | tensorflow/keras, openai, optuna, prometheus-client, pandas-ta |
 
 Alternatively start the full stack with Postgres and Prometheus using Docker Compose:
 
