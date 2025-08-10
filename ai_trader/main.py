@@ -102,11 +102,15 @@ Commandes disponibles :
     async def perform_startup_checks(self) -> bool:
         return await perform_startup_checks(self.execution, self.config)
 
-    def start_dashboard(self, host: str = "0.0.0.0", port: int = 5000):
-        """Démarrer le dashboard web"""
+    def start_dashboard(self, host: str = "0.0.0.0", port: int | None = None):
+        """Start the optional dashboard in a background thread."""
         try:
+            if port is None:
+                port = int(os.getenv("DASHBOARD_PORT", "5000"))
             dashboard_thread = run_dashboard(self, host=host, port=port)
-            logging.getLogger(__name__).info("Dashboard started on http://%s:%s", host, port)
+            logging.getLogger(__name__).info(
+                "Dashboard started on http://%s:%s", host, port
+            )
             asyncio.create_task(
                 self.notify(
                     "dashboard_started",
@@ -119,7 +123,7 @@ Commandes disponibles :
 
 Fonctionnalités :
 ✅ Métriques temps réel
-✅ Graphiques interactifs  
+✅ Graphiques interactifs
 ✅ Contrôles agent
 ✅ Historique trades
 ✅ Logs système
@@ -179,8 +183,9 @@ Fonctionnalités :
         self.is_running = True
         self.start_time = datetime.utcnow()
 
-        # Démarrage du dashboard web
-        self.start_dashboard()
+        # Démarrage optionnel du dashboard web
+        if os.getenv("ENABLE_DASHBOARD", "false").lower() == "true":
+            self.start_dashboard()
 
         await self.initialize_telegram_control()
         startup_success = await self.perform_startup_checks()
