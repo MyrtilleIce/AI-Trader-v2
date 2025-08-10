@@ -36,6 +36,30 @@ Run the unit tests with:
 python -m unittest
 ```
 
+## Dashboard
+
+An optional web dashboard exposes runtime metrics. Enable it via environment variables:
+
+```bash
+export ENABLE_DASHBOARD=true
+export DASHBOARD_PORT=5000  # optional
+```
+
+Then start the agent normally and browse to `http://localhost:5000` (the port will
+automatically increment if already in use).
+
+Key API endpoints include `/api/healthz`, `/api/kpis`, `/api/positions` and
+`/api/orders`. Basic authentication is available when `DASHBOARD_USERNAME` and
+`DASHBOARD_PASSWORD` are set.
+
+Run the dashboard tests with:
+
+```bash
+pytest -q tests/test_boot_agent_intact.py
+pytest -q tests/test_dashboard_endpoints.py
+pytest -q tests/test_trading_not_blocked.py
+```
+
 ## Git configuration
 
 Set up your Git identity to use the correct email for commits:
