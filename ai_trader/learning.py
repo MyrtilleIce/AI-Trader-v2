@@ -3,17 +3,46 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import List
 
-import keras
-import openai
-import optuna
 import pandas as pd
 import requests
 from dotenv import dotenv_values
-from keras.layers import Dense
-from keras.models import Sequential
+
+ENABLE_LEARNING = os.getenv("ENABLE_LEARNING", "true").lower() == "true"
+ENABLE_OPENAI = os.getenv("ENABLE_OPENAI", "true").lower() == "true"
+ENABLE_OPTUNA = os.getenv("ENABLE_OPTUNA", "true").lower() == "true"
+
+# Optional heavy imports ----------------------------------------------------
+keras = None
+Sequential = Dense = None
+if ENABLE_LEARNING:
+    try:
+        import keras  # type: ignore
+        from keras.layers import Dense  # type: ignore
+        from keras.models import Sequential  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).warning("Keras import failed: %s", exc)
+        keras = None
+        Sequential = Dense = None
+
+openai = None
+if ENABLE_OPENAI:
+    try:
+        import openai  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).warning("OpenAI import failed: %s", exc)
+        openai = None
+
+optuna = None
+if ENABLE_OPTUNA:
+    try:
+        import optuna  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).warning("Optuna import failed: %s", exc)
+        optuna = None
 
 
 class Researcher:
@@ -22,7 +51,8 @@ class Researcher:
     def __init__(self, config_path: str = ".env") -> None:
         cfg = dotenv_values(config_path)
         self.serp_key = cfg.get("SERPAPI_KEY", "")
-        openai.api_key = cfg.get("OPENAI_API_KEY", "")
+        if openai:
+            openai.api_key = cfg.get("OPENAI_API_KEY", "")
         self.log = logging.getLogger(self.__class__.__name__)
 
     def search(self, query: str, num_results: int = 5) -> List[str]:
@@ -38,6 +68,9 @@ class Researcher:
             return []
 
     def summarize(self, texts: List[str]) -> str:
+        if not openai:
+            self.log.warning("OpenAI disabled or not installed")
+            return ""
         prompt = "\n".join(texts)
         try:
             completion = openai.ChatCompletion.create(
@@ -58,11 +91,14 @@ class AutoOptimizer:
         self.trials = trials
         self.log = logging.getLogger(self.__class__.__name__)
 
-    def optimise(self, data: pd.DataFrame) -> None:
+    def optimise(self, data: pd.DataFrame) -> None:  # noqa: D401
+        if not optuna:
+            self.log.warning("Optuna disabled or not installed")
+            return
+
         def objective(trial: optuna.Trial) -> float:
             threshold = trial.suggest_float("threshold", 0.1, 1.0)  # noqa: F841
             window = trial.suggest_int("window", 10, 50)  # noqa: F841
-            # TODO: backtest with given parameters
             return 0.0
 
         try:
@@ -77,6 +113,8 @@ class DenseModel:
     """Optional neural network for short-term prediction."""
 
     def __init__(self, input_dim: int, model_path: str = "model.h5") -> None:
+        if not keras or not Sequential or not Dense:
+            raise ImportError("Keras not available - cannot initialise DenseModel")
         self.model_path = model_path
         self.model = Sequential(
             [Dense(32, activation="relu", input_shape=(input_dim,)), Dense(1)]

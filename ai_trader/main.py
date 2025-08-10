@@ -12,16 +12,27 @@ from datetime import datetime
 from dotenv import load_dotenv
 import yaml
 
+ENABLE_LEARNING = os.getenv("ENABLE_LEARNING", "true").lower() == "true"
+ENABLE_OPENAI = os.getenv("ENABLE_OPENAI", "true").lower() == "true"
+ENABLE_OPTUNA = os.getenv("ENABLE_OPTUNA", "true").lower() == "true"
+
 from .ai_model import SimpleModel
 from .data_handler import DataHandler
 from .execution import BitgetExecution
-from .learning import Researcher
 from .memory import Memory
 from .notifications import NOTIFIER
 from .risk_manager import RiskManager
 from .strategy import Strategy
 from .test_suite import AgentTestSuite
 from .dashboard import run_dashboard
+
+Researcher = None
+if ENABLE_LEARNING or ENABLE_OPENAI or ENABLE_OPTUNA:
+    try:
+        from .learning import Researcher  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).warning("Learning modules unavailable: %s", exc)
+        Researcher = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,7 +62,7 @@ class TradingAgent:
         self.risk_manager = RiskManager(self.execution, self.symbol, self.leverage)
         self.memory = Memory()
         self.model = SimpleModel()
-        self.researcher = Researcher()
+        self.researcher = Researcher() if Researcher else None
 
         self.notification_manager = NOTIFIER
         self.notification_manager.agent = self
@@ -169,7 +180,7 @@ Fonctionnalités :
                     }
                 )
 
-            if step % (60 * 24) == 0:
+            if self.researcher and step % (60 * 24) == 0:
                 tips = await asyncio.to_thread(self.researcher.search, "crypto trading strategy")
                 summary = await asyncio.to_thread(self.researcher.summarize, tips)
                 logging.getLogger("Research").info("Daily summary: %s", summary)
@@ -315,7 +326,7 @@ async def run_bot(run_once: bool = True) -> None:
     risk = RiskManager(executor, symbol, leverage)
     memory = Memory()
     model = SimpleModel()
-    researcher = Researcher()
+    researcher = Researcher() if Researcher else None
 
     config_path = Path(os.getenv("CONFIG_FILE", "config.yaml"))
     config = yaml.safe_load(config_path.read_text()) if config_path.exists() else {}
@@ -355,7 +366,7 @@ async def run_bot(run_once: bool = True) -> None:
             )
 
         # optional learning
-        if step % (60 * 24) == 0:  # once a day assuming loop every minute
+        if researcher and step % (60 * 24) == 0:  # once a day assuming loop every minute
             tips = await asyncio.to_thread(researcher.search, "crypto trading strategy")
             summary = await asyncio.to_thread(researcher.summarize, tips)
             logging.getLogger("Research").info("Daily summary: %s", summary)
