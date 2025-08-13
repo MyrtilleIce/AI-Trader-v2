@@ -1,5 +1,3 @@
-"""Dashboard web pour AI-Trader-v2"""
+"""Optional dashboard package."""
 
-__all__ = ["run_dashboard"]
-
-from .server import run_dashboard
+__all__: list[str] = []

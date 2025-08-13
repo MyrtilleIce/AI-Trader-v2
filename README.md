@@ -2,17 +2,25 @@
 
 Autonomous trading agent for Bitget Futures.
 
-## Setup
+## Installation
 
-1. Bootstrap the environment (creates `.venv`, installs deps and runs preflight):
-   ```bash
-   scripts/bootstrap_dev.sh
-   ```
-2. Copy `.env.example` to `.env` and provide your API credentials.
-3. Run the agent:
-   ```bash
-   python -m ai_trader.main
-   ```
+```bash
+# Core + dev (sans UI)
+pip install -e .[dev]
+
+# Avec dashboard
+pip install -e .[dashboard,dev]
+
+# ML (dans un venv dédié conseillé)
+pip install -e .[ml]
+```
+
+Listez les dépendances privées éventuelles dans `requirements.private.txt` et installez-les manuellement.
+Copiez ensuite `.env.example` vers `.env` et fournissez vos identifiants API, puis lancez l'agent :
+
+```bash
+python -m ai_trader.main
+```
 
 ### Environment flags
 
@@ -48,8 +56,10 @@ pip install -r requirements.txt -c constraints-3.11.txt
 
 | Category | Packages |
 | -------- | -------- |
-| Required | numpy, pandas, scipy, scikit-learn, Flask, requests, plotly, dash |
-| Optional | tensorflow/keras, openai, optuna, prometheus-client, pandas-ta |
+| Core | requests, pandas, numpy, python-dotenv |
+| Dashboard (extra) | Flask, Flask-Cors, dash, dash-bootstrap-components, plotly, flask-socketio |
+| Dev (extra) | pytest, pytest-cov, requests-mock |
+| ML (extra) | keras, tensorflow |
 
 Alternatively start the full stack with Postgres and Prometheus using Docker Compose:
 
@@ -121,12 +131,10 @@ A screenshot of the overview and equity sections:
 
 ![dashboard screenshot](docs/dashboard_overview.png)
 
-Run the dashboard tests with:
+Run the test suite with:
 
 ```bash
-pytest -q tests/test_boot_agent_intact.py
-pytest -q tests/test_dashboard_endpoints.py
-pytest -q tests/test_trading_not_blocked.py
+pytest -q
 ```
 
 ## Git configuration
