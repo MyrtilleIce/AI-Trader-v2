@@ -48,6 +48,11 @@ try:  # pragma: no cover
     from . import stream as _stream
 
     _socketio = _stream.socketio
+    if _socketio:
+        try:
+            _stream.attach_socketio(_socketio)
+        except Exception:  # pragma: no cover - attaching should be best effort
+            log.warning("SocketIO attachment failed", exc_info=True)
 except Exception:  # pragma: no cover
     _stream = None
     _socketio = None

@@ -5,10 +5,81 @@ from __future__ import annotations
 import os
 import json
 import requests
-from dash import html, dcc, dash_table, callback, Output, Input, State
+import dash
+from dash import html, dcc, dash_table, callback, Output, Input, State, Dash, ctx
 import plotly.graph_objects as go
 
 BASE = lambda: f"http://localhost:{os.getenv('DASHBOARD_PORT','5000')}"
+
+app = Dash.get_app() if hasattr(Dash, "get_app") else None
+
+if app:
+    app.clientside_callback(
+        """
+        function(n, url){
+          if (!url) return false;
+          if (window.__sse_ready) return true;
+          try {
+            const full = (window.location.origin + url);
+            const es = new EventSource(full);
+            window.__sse = es;
+            window.__sse_ready = true;
+            window.__equity_buf = [];
+            window.__logs_buf = [];
+            window.__pos_buf = [];
+            es.addEventListener('equity_update', function(ev){
+              try { const d = JSON.parse(ev.data); window.__equity_buf.push(d); } catch(_){ }
+            });
+            es.addEventListener('log_event', function(ev){
+              try { const d = JSON.parse(ev.data); window.__logs_buf.push(d); } catch(_){ }
+            });
+            es.addEventListener('position_update', function(ev){
+              try { const d = JSON.parse(ev.data); window.__pos_buf.push(d); } catch(_){ }
+            });
+            es.onerror = function(){ try { es.close(); window.__sse_ready = false; } catch(_){ } };
+            return true;
+          } catch(e){ return false; }
+        }
+        """,
+        Output('sse_ready','data'),
+        Input('sse_init','n_intervals'),
+        State('sse_url','data')
+    )
+
+    app.clientside_callback(
+        """
+        function(_){
+          var buf = (window.__equity_buf || []);
+          if (!buf.length) { return window.dash_clientside.no_update; }
+          var xs = [], ys = [];
+          for (var i=0; i<buf.length; i++){
+            var p = buf[i];
+            xs.push(new Date(p.ts));
+            ys.push(p.equity);
+          }
+          buf.length = 0;
+          return [{x:[xs], y:[ys]}, [0], 2000];
+        }
+        """,
+        Output('equity_fig','extendData'),
+        Input('flush_tick','n_intervals')
+    )
+
+    app.clientside_callback(
+        """
+        function(_){ var b = window.__logs_buf||[]; if(!b.length) return window.dash_clientside.no_update; var out=b.slice(); b.length=0; return out; }
+        """,
+        Output('logs_buf','data'),
+        Input('flush_tick','n_intervals')
+    )
+
+    app.clientside_callback(
+        """
+        function(_){ var b = window.__pos_buf||[]; if(!b.length) return window.dash_clientside.no_update; var out=b.slice(); b.length=0; return out; }
+        """,
+        Output('pos_buf','data'),
+        Input('flush_tick','n_intervals')
+    )
 
 
 def build_layout():
@@ -25,6 +96,13 @@ def build_layout():
                     dcc.Graph(id="equity_fig"),
                 ]
             ),
+            # --- Streaming infra (client-side) ---
+            dcc.Store(id="sse_ready", data=False),
+            dcc.Store(id="sse_url", data="/api/stream"),
+            dcc.Interval(id="sse_init", interval=500, n_intervals=0, max_intervals=1),
+            dcc.Interval(id="flush_tick", interval=1000, n_intervals=0),
+            dcc.Store(id="logs_buf", data=[]),
+            dcc.Store(id="pos_buf", data=[]),
             html.H4("Activity Logs"),
             html.Pre(id="log_box", style={"height": "200px", "overflowY": "scroll"}),
             html.H4("Open Positions"),
@@ -72,6 +150,14 @@ def build_layout():
 # ----------------------------- Callbacks ------------------------------------
 
 
+@callback(Output("equity_fig", "figure"), Input("sse_ready", "data"))
+def _init_equity(_):
+    fig = go.Figure()
+    fig.update_layout(margin=dict(l=20, r=20, t=10, b=20))
+    fig.add_scatter(x=[], y=[], mode="lines", name="Equity")
+    return fig
+
+
 @callback(Output("kpi_row", "children"), Input("tick", "n_intervals"))
 def _kpis(_):
     try:
@@ -85,8 +171,15 @@ def _kpis(_):
         return "API indisponible"
 
 
-@callback(Output("equity_fig", "figure"), Input("win_sel", "value"), Input("tick", "n_intervals"))
-def _equity(win, _):
+@callback(
+    Output("equity_fig", "figure"),
+    Input("win_sel", "value"),
+    Input("tick", "n_intervals"),
+    State("sse_ready", "data"),
+)
+def _equity(win, _, sse_ready):
+    if sse_ready:
+        return dash.no_update
     try:
         r = requests.get(BASE() + f"/api/equity?window={win}", timeout=2)
         series = r.json()["data"]["series"]
@@ -101,23 +194,59 @@ def _equity(win, _):
         return go.Figure()
 
 
-@callback(Output("log_box", "children"), Input("tick", "n_intervals"))
-def _logs(_):
+@callback(
+    Output("log_box", "children"),
+    Output("logs_buf", "data"),
+    Input("tick", "n_intervals"),
+    Input("logs_buf", "data"),
+    State("log_box", "children"),
+)
+def _logs(_, buf, current):
+    buf = buf or []
+    trig = ctx.triggered_id
+    if trig == "logs_buf":
+        lines = (current or "").split("\n") if current else []
+        lines.extend([l.get("msg", "") for l in buf])
+        return "\n".join(lines[-200:]), []
     try:
         r = requests.get(BASE() + "/api/logs?level=info&limit=200", timeout=2)
         lines = [l.get("msg", "") for l in r.json()["data"]]
-        return "\n".join(lines)
+        lines.extend([l.get("msg", "") for l in buf])
+        return "\n".join(lines[-200:]), []
     except Exception:
-        return ""
+        return "", []
 
 
-@callback(Output("pos_table", "data"), Input("tick", "n_intervals"))
-def _positions(_):
+@callback(
+    Output("pos_table", "data"),
+    Output("pos_buf", "data"),
+    Input("tick", "n_intervals"),
+    Input("pos_buf", "data"),
+    State("pos_table", "data"),
+)
+def _positions(_, buf, current):
+    buf = buf or []
+    trig = ctx.triggered_id
+    if trig == "pos_buf":
+        current_map = {p.get("id"): p for p in (current or []) if p.get("id") is not None}
+        for p in buf:
+            pid = p.get("id")
+            if pid is not None:
+                current_map[pid] = p
+        return list(current_map.values()), []
     try:
         r = requests.get(BASE() + "/api/positions", timeout=2)
-        return r.json()["data"]
+        data = r.json()["data"]
+        if buf:
+            data_map = {p.get("id"): p for p in data if p.get("id") is not None}
+            for p in buf:
+                pid = p.get("id")
+                if pid is not None:
+                    data_map[pid] = p
+            data = list(data_map.values())
+        return data, []
     except Exception:
-        return []
+        return current or [], []
 
 
 @callback(Output("kpi_detail", "children"), Input("tick", "n_intervals"))
