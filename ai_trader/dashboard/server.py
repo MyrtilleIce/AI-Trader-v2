@@ -26,6 +26,32 @@ app = Flask(
     static_folder=os.path.join(os.path.dirname(__file__), "static"),
 )
 
+# Register API blueprint and enable CORS for the dashboard API. The dashboard is
+# optional; failures here should not prevent the core agent from running.
+try:  # pragma: no cover - optional dependency
+    from flask_cors import CORS
+
+    origin = f"http://localhost:{os.getenv('DASHBOARD_PORT', '5000')}"
+    CORS(app, resources={r"/api/*": {"origins": origin}})
+except Exception:  # pragma: no cover
+    pass
+
+try:
+    from .routes import api_bp
+
+    app.register_blueprint(api_bp, url_prefix="/api")
+except Exception as exc:  # pragma: no cover - blueprint optional
+    log.warning("API blueprint not loaded: %s", exc)
+
+# Optional websocket support -------------------------------------------------
+try:  # pragma: no cover
+    from . import stream as _stream
+
+    _socketio = _stream.socketio
+except Exception:  # pragma: no cover
+    _stream = None
+    _socketio = None
+
 # Basic auth configuration --------------------------------------------------
 USERNAME = os.getenv("DASHBOARD_USERNAME")
 PASSWORD = os.getenv("DASHBOARD_PASSWORD")
@@ -161,124 +187,6 @@ def api_metrics() -> Response:
     return jsonify(dashboard_api.get_metrics())
 
 
-@app.route("/api/kpis")
-@requires_auth
-def api_kpis() -> Response:
-    return api_metrics()
-
-
-@app.route("/api/metrics/<name>")
-@requires_auth
-def api_metric(name: str) -> Response:
-    if not dashboard_api:
-        return jsonify({"error": "Agent not initialized"}), 503
-    metrics = dashboard_api.get_metrics()
-    if name not in metrics:
-        return jsonify({"error": "metric not found"}), 404
-    return jsonify({name: metrics[name]})
-
-
-@app.route("/api/equity_curve")
-@requires_auth
-def api_equity_curve() -> Response:
-    if not dashboard_api:
-        return jsonify([]), 503
-    start_str = request.args.get("from")
-    end_str = request.args.get("to")
-    if start_str and end_str:
-        start = datetime.fromisoformat(start_str)
-        end = datetime.fromisoformat(end_str)
-    else:
-        hours = int(request.args.get("hours", 24))
-        end = datetime.utcnow()
-        start = end - timedelta(hours=hours)
-    return jsonify(dashboard_api.get_equity_curve(start, end))
-
-
-@app.route("/api/positions")
-@requires_auth
-def api_positions() -> Response:
-    if not dashboard_api:
-        return jsonify([]), 503
-    return jsonify(dashboard_api.get_positions())
-
-
-@app.route("/api/orders")
-@requires_auth
-def api_orders() -> Response:
-    if not dashboard_api:
-        return jsonify([]), 503
-    limit = int(request.args.get("limit", 50))
-    return jsonify(dashboard_api.get_recent_trades(limit))
-
-
-@app.route("/api/trades")
-@requires_auth
-def api_trades() -> Response:
-    return api_orders()
-
-
-@app.route("/api/performance")
-@requires_auth
-def api_performance() -> Response:
-    if not dashboard_api:
-        return jsonify([]), 503
-    days = int(request.args.get("days", 7))
-    return jsonify(dashboard_api.get_performance_data(days))
-
-
-@app.route("/api/logs")
-@requires_auth
-def api_logs() -> Response:
-    if not dashboard_api:
-        return jsonify([]), 503
-    lines = int(request.args.get("lines", 200))
-    return jsonify(dashboard_api.get_logs(lines))
-
-
-@app.route("/api/control", methods=["POST"])
-@requires_auth
-def api_control() -> Response:
-    if not agent_instance:
-        return jsonify({"error": "Agent not available"}), 503
-    try:
-        data = request.get_json() or {}
-        action = data.get("action")
-
-        if action == "start" and hasattr(agent_instance, "start"):
-            result = asyncio.run(agent_instance.start())
-            return jsonify({"status": "started", "success": result})
-
-        if action == "stop" and hasattr(agent_instance, "stop"):
-            asyncio.run(agent_instance.stop())
-            return jsonify({"status": "stopped"})
-
-        if action == "restart":
-            if hasattr(agent_instance, "restart"):
-                asyncio.run(agent_instance.restart())
-                return jsonify({"status": "restarted"})
-            if hasattr(agent_instance, "stop") and hasattr(agent_instance, "start"):
-                asyncio.run(agent_instance.stop())
-                asyncio.sleep(2)
-                result = asyncio.run(agent_instance.start())
-                return jsonify({"status": "restarted", "success": result})
-            return jsonify({"error": "Restart method not available"}), 400
-
-        if action == "test" and hasattr(agent_instance, "run_diagnostic_tests"):
-            asyncio.run(agent_instance.run_diagnostic_tests())
-            return jsonify({"status": "tests_started"})
-
-        if action == "emergency_stop" and hasattr(agent_instance, "emergency_stop"):
-            asyncio.run(agent_instance.emergency_stop())
-            return jsonify({"status": "emergency_stopped"})
-
-        return jsonify({"error": "Invalid action"}), 400
-
-    except Exception as exc:  # noqa: BLE001
-        log.error("Control API error: %s", exc)
-        return jsonify({"error": str(exc)}), 500
-
-
 # ==================== GESTION D'ERREURS ====================
 @app.errorhandler(404)
 def not_found(error):  # noqa: D401, ARG001
@@ -321,6 +229,14 @@ def run_dashboard(
             werkzeug_logger = logging.getLogger("werkzeug")
             werkzeug_logger.setLevel(logging.WARNING)
         log.info("Starting dashboard on http://%s:%s", host, port)
+        if _stream and _socketio:
+            try:
+                _stream.attach_socketio(_socketio)
+                _socketio.init_app(app, cors_allowed_origins="*")
+                _socketio.run(app, host=host, port=port, debug=debug, use_reloader=False)
+                return
+            except Exception as exc:  # pragma: no cover
+                log.warning("SocketIO disabled: %s", exc)
         app.run(host=host, port=port, debug=debug, use_reloader=False, threaded=True)
 
     dashboard_thread = threading.Thread(target=_run_flask, daemon=True)
