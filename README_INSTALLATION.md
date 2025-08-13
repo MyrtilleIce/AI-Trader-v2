@@ -18,8 +18,18 @@
    ```
 
    Utilisez `--enable-dashboard` pour activer l'interface web. Les variables
-   d'environnement `DASHBOARD_USERNAME` et `DASHBOARD_PASSWORD` peuvent être
-   définies pour protéger l'accès.
+   d'environnement suivantes contrôlent la sécurité et les options temps réel :
+
+   | Variable | Par défaut | Description |
+   | --- | --- | --- |
+   | `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD` | `admin` / `change_me` | Identifiants si `DASHBOARD_AUTH=basic` |
+   | `DASHBOARD_TOKEN` | vide | Jeton Bearer si `DASHBOARD_AUTH=token` |
+   | `DASHBOARD_AUTH` | `disabled` | Mode d'authentification (`disabled`, `basic`, `token`) |
+   | `DASHBOARD_PORT` | `5000` | Port HTTP du dashboard |
+
+   Le dashboard supporte WebSocket (`flask_socketio`) ou, en repli, Server Sent
+   Events. Aucune dépendance n'est obligatoire ; en cas d'absence les fonctions
+   se dégradent proprement.
 
 ## Vérification Rapide
 

@@ -91,9 +91,35 @@ python3 start_agent.py --enable-dashboard
 Then browse to `http://localhost:5000` (the port will automatically increment if
 already in use).
 
-Key API endpoints include `/api/healthz`, `/api/kpis`, `/api/positions` and
-`/api/orders`. Basic authentication is available when `DASHBOARD_USERNAME` and
-`DASHBOARD_PASSWORD` are set.
+### API endpoints
+
+All responses follow the JSON structure `{ "ok": bool, "data": ..., "error": null|{code,msg} }`.
+
+| Endpoint | Description |
+| -------- | ----------- |
+| `GET /api/overview` | high level balances and stats |
+| `GET /api/equity?window=1d|7d|30d|all` | equity curve |
+| `GET /api/logs?level=info&limit=200` | recent log lines |
+| `GET /api/positions` | open positions |
+| `GET /api/kpis` | computed KPIs |
+| `GET /api/signals` | recent AI signals |
+| `GET /api/alerts` | alert notifications |
+| `POST /api/control/<start|stop|pause|resume>` | publish control events |
+| `POST /api/mode` | change mode (`backtest`, `paper`, `live`) |
+| `POST /api/strategy` | switch trading strategy |
+| `GET /api/export/trades.csv` | download trades |
+| `GET /api/export/metrics.xlsx` | download metrics sheet |
+| `GET /api/export/report.pdf` | download PDF report |
+
+Example:
+
+```bash
+curl http://localhost:5000/api/overview
+```
+
+A screenshot of the overview and equity sections:
+
+![dashboard screenshot](docs/dashboard_overview.png)
 
 Run the dashboard tests with:
 
