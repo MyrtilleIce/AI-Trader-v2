@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
 import time
 from pathlib import Path
 from datetime import datetime
@@ -24,7 +25,6 @@ from .notifications import NOTIFIER
 from .risk_manager import RiskManager
 from .strategy import Strategy
 from .test_suite import AgentTestSuite
-from .dashboard import run_dashboard
 
 Researcher = None
 if ENABLE_LEARNING or ENABLE_OPENAI or ENABLE_OPTUNA:
@@ -116,36 +116,27 @@ Commandes disponibles :
     def start_dashboard(self, host: str = "0.0.0.0", port: int | None = None):
         """Start the optional dashboard in a background thread."""
         try:
+            from .dashboard.server import create_app
+        except Exception as exc:  # pragma: no cover
+            logging.getLogger(__name__).error("Failed to import dashboard: %s", exc)
+            return None
+        try:
             if port is None:
                 port = int(os.getenv("DASHBOARD_PORT", "5000"))
-            dashboard_thread = run_dashboard(self, host=host, port=port)
-            logging.getLogger(__name__).info(
-                "Dashboard started on http://%s:%s", host, port
-            )
-            asyncio.create_task(
-                self.notify(
-                    "dashboard_started",
-                    f"""
-🖥️ **Dashboard Web Activé**
-
-📊 Interface : http://{host}:{port}
-🔄 Refresh : 5 secondes
-📱 Responsive : Mobile/Desktop
-
-Fonctionnalités :
-✅ Métriques temps réel
-✅ Graphiques interactifs
-✅ Contrôles agent
-✅ Historique trades
-✅ Logs système
-                    """,
-                )
-            )
+            flask_app, dash_app, socketio = create_app()
+            def _run() -> None:
+                if socketio:
+                    socketio.run(flask_app, host=host, port=port, debug=False)
+                else:
+                    flask_app.run(host=host, port=port, debug=False, use_reloader=False)
+            dashboard_thread = threading.Thread(target=_run, daemon=True)
+            dashboard_thread.start()
+            logging.getLogger(__name__).info("Dashboard started on http://%s:%s", host, port)
+            asyncio.create_task(self.notify("dashboard_started", f"Dashboard Web Active sur http://{host}:{port}"))
             return dashboard_thread
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # pragma: no cover
             logging.getLogger(__name__).error("Failed to start dashboard: %s", exc)
             return None
-
     async def start_main_loop(self) -> None:
         self.main_task = asyncio.create_task(self.main_loop())
 

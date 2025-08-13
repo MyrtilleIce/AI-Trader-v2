@@ -1,0 +1,2 @@
+# Dépendances privées (install manuelle, accès requis). Exemple :
+# git+ssh://git@github.com/orga/paquet-prive.git@v1.2.3#egg=paquet-prive

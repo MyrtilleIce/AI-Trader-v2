@@ -13,7 +13,7 @@ from pathlib import Path
 
 def verify_dependencies():
     """Vérifier les dépendances avant le lancement"""
-    required_modules = ['pandas', 'flask', 'yaml', 'requests', 'ccxt']
+    required_modules = ['pandas', 'yaml', 'requests', 'ccxt']
     
     missing = []
     for module in required_modules:

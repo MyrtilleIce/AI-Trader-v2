@@ -6,7 +6,10 @@ import datetime as dt
 import logging
 import os
 from dataclasses import dataclass
-from distutils.util import strtobool
+try:  # pragma: no cover - Python 3.12+ drops distutils
+    from distutils.util import strtobool  # type: ignore
+except Exception:  # pragma: no cover
+    from setuptools._distutils.util import strtobool  # type: ignore
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
