@@ -8,7 +8,6 @@ import io
 from .adapters import TradingDataAdapter, ControlAdapter
 from .security import require_auth
 from .news import get_news
-from .stream import sse_stream
 from . import export as export_utils
 
 api_bp = Blueprint("api", __name__)
@@ -194,4 +193,6 @@ def export_report():
 @api_bp.get("/stream")
 @require_auth
 def stream_events():
+    from .stream import sse_stream
+
     return sse_stream()
