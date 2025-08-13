@@ -1,5 +1,13 @@
 from datetime import datetime
 
+import importlib.util
+import pytest
+
+flask_spec = importlib.util.find_spec("flask")
+dash_spec = importlib.util.find_spec("dash")
+if flask_spec is None or dash_spec is None:
+    pytest.skip("Dashboard dependencies not installed", allow_module_level=True)
+
 from ai_trader.dashboard import server
 
 
