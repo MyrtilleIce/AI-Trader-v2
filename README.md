@@ -82,8 +82,14 @@ export ENABLE_DASHBOARD=true
 export DASHBOARD_PORT=5000  # optional
 ```
 
-Then start the agent normally and browse to `http://localhost:5000` (the port will
-automatically increment if already in use).
+You can also start the agent with the dashboard directly via the helper script:
+
+```bash
+python3 start_agent.py --enable-dashboard
+```
+
+Then browse to `http://localhost:5000` (the port will automatically increment if
+already in use).
 
 Key API endpoints include `/api/healthz`, `/api/kpis`, `/api/positions` and
 `/api/orders`. Basic authentication is available when `DASHBOARD_USERNAME` and

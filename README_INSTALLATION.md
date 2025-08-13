@@ -14,12 +14,16 @@
 
 3. **Lancement de l'agent :**
    ```bash
-   python3 start_agent.py
+   python3 start_agent.py --enable-dashboard  # optionnel
    ```
+
+   Utilisez `--enable-dashboard` pour activer l'interface web. Les variables
+   d'environnement `DASHBOARD_USERNAME` et `DASHBOARD_PASSWORD` peuvent être
+   définies pour protéger l'accès.
 
 ## Vérification Rapide
 
-- **Dashboard Web :** http://localhost:5000
+- **Dashboard Web :** http://localhost:5000 (si activé)
 - **Contrôle Telegram :** Commandes /start, /stop, /status
 - **Logs :** Affichés dans le terminal
 
